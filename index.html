@@ -119,6 +119,9 @@ body{overflow:hidden}#app{width:100vw;height:100vh;height:100dvh;display:flex;fl
 #audioStatus{font-size:10px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:720px) and (orientation:landscape){.song-actions{gap:2px}.song-actions .tiny-btn{padding:4px 5px}.songname{max-width:110px}}
 
+/* 严格闯关标记：永不靠计时器自动前进。 */
+#gateStatus{display:inline-flex!important;min-width:auto;font-size:9px;padding:4px 6px}
+@media(max-width:700px) and (orientation:landscape){#gateStatus{display:none!important}}
 /* 紧凑横屏时避免相机首次引导文字盖住手势状态栏 */
 @media(max-width:700px) and (orientation:landscape){
  .camera-help{inset:12% 6% 29%;gap:3px}
@@ -132,7 +135,7 @@ body{overflow:hidden}#app{width:100vw;height:100vh;height:100dvh;display:flex;fl
 <body>
 <div id="app">
  <header class="topbar">
-  <div class="brand"><div class="brand-mark">♫</div><div><h1>指尖和弦</h1><small>LANDSCAPE · 左手和弦 · 右手握拳/张开发声</small></div></div>
+  <div class="brand"><div class="brand-mark">♫</div><div><h1>指尖和弦</h1><small>LANDSCAPE · 每拍必须做对才前进 · 无手势无声</small></div></div>
   <div class="pillbar" role="group" aria-label="乐器音色"><button class="seg active" id="inst-uke" type="button">尤克里里</button><button class="seg" id="inst-guitar" type="button">吉他</button></div>
   <label class="select-wrap"><span>曲目</span><select id="songSelect" aria-label="选择练习曲"><option value="not_sad">我不难过</option><option value="old_date">老派约会之必要</option><option value="love">情非得已</option></select></label>
   <button class="mini-btn" id="flipBtn" title="切换前后摄像头">⟳ <span class="hide-xs">切换镜头</span></button>
@@ -142,7 +145,7 @@ body{overflow:hidden}#app{width:100vw;height:100vh;height:100dvh;display:flex;fl
   <section class="pane camera-pane" aria-label="手势检测摄像头区域">
    <video id="video" autoplay playsinline webkit-playsinline muted></video><canvas id="overlay"></canvas>
    <div class="cam-head"><div class="hud-tag"><span id="statusDot" class="status-dot"></span><span id="camStatus">未开启摄像头</span></div><button type="button" class="hud-tag swap-btn" id="swapHandsBtn" title="如果左右手识别相反，点击对调">⇄ 左右手对调</button></div>
-   <div id="cameraHelp" class="camera-help"><div class="bigcam">✋</div><strong>用手势演奏和弦</strong><p>开启摄像头，同时放入双手：<br><b>左手</b>伸出对应和弦的手指数；<b>右手</b>握拳为 ↓ 下扫，五指张开为 ↑ 上扫。<br>握拳/张开切换即可触发，不必上下挥手。<br>点「🔊 试音」再点「▶ 开始」；做同样方向的下一拍，先将右手变为 1～3 指再重新握拳或张开。</p><div class="tap">点击右上角「开启摄像头」</div></div>
+   <div id="cameraHelp" class="camera-help"><div class="bigcam">✋</div><strong>用手势演奏和弦</strong><p>开启摄像头，同时放入双手：<br><b>左手</b>伸出对应和弦的手指数；<b>右手</b>握拳为 ↓ 下扫，五指张开为 ↑ 上扫。<br>握拳/张开切换即可触发，不必上下挥手。<br>「▶ 开始」只进入等待，不会自动播放。左手数字正确＋右手拳头↓/五指↑正确，才弹响并进入下一拍。重复同一手势前请将右手暂时松到1～3指复位。</p><div class="tap">点击右上角「开启摄像头」</div></div>
    <div class="cam-bottom"><div class="hand-info"><strong id="fingerText">左手：等待和弦 · 右手：等待扫弦</strong><small id="gestureText">左手 C＝握拳0指，G＝1指；右手握拳↓ / 张开↑</small></div><div class="legend" id="audioStatus">🔇 声音未测试 · 点右侧「🔊 试音」</div></div>
    <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </section>
@@ -158,12 +161,12 @@ body{overflow:hidden}#app{width:100vw;height:100vh;height:100dvh;display:flex;fl
     </div><div class="finger-diagram" id="fingerDiagram" aria-label="目标和弦指法图"></div></div>
    </section>
    <section class="pane song-card" aria-label="歌曲动作进度轨道">
-    <div class="song-line"><div class="songname" id="songName">我不难过</div><div class="song-actions"><span class="auto-gate" id="gateStatus" style="display:none">等待左手</span><button class="tiny-btn active" id="modeBtn" title="切换弹唱/手势闯关模式">🎤 弹唱</button><button class="tiny-btn" id="tempoBtn" title="伴奏速度">♩ 88</button><button class="tiny-btn" id="scoreBtn" title="查看新上传的歌词和弦谱">📖 词谱</button><button class="tiny-btn" id="editLyricsBtn" title="粘贴歌词、导入 LRC 和本地音乐">＋ 添加歌词</button><button class="tiny-btn audio-test" id="testSoundBtn" type="button" title="点击试听 C 和弦，解除手机浏览器音频静音">🔊 试音</button><button class="tiny-btn play" id="playBtn">▶ 开始</button></div></div>
+    <div class="song-line"><div class="songname" id="songName">我不难过</div><div class="song-actions"><span class="auto-gate" id="gateStatus">🔒 等待双手</span><button class="tiny-btn active" id="modeBtn" title="两种模式都必须完成当前拍才前进">🎤 弹唱</button><button class="tiny-btn" id="tempoBtn" title="仅作速度参考；不会自动走拍">♩ 88</button><button class="tiny-btn" id="scoreBtn" title="查看新上传的歌词和弦谱">📖 词谱</button><button class="tiny-btn" id="editLyricsBtn" title="粘贴歌词、导入 LRC 和本地音乐">＋ 添加歌词</button><button class="tiny-btn audio-test" id="testSoundBtn" type="button" title="点击试听 C 和弦，解除手机浏览器音频静音">🔊 试音</button><button class="tiny-btn play" id="playBtn">▶ 开始</button></div></div>
     <div class="timeline-wrap">
      <div class="lyrics-stage empty" id="lyricsStage" aria-label="歌词显示，点击打开歌词导入" aria-live="off" role="button" tabindex="0" title="点这里粘贴或导入这首歌的歌词"><div class="lyrics-prev" id="lyricPrev">♪ 弹唱练习</div><div class="lyrics-current no-lyrics" id="lyricCurrent">＋ 点这里添加本曲歌词</div><div class="lyrics-next" id="lyricNext">支持粘贴或导入 .lrc 文件</div></div>
      <div class="beat-head"><strong id="positionText">第 1 小节 · 准备</strong><span class="cue" id="cueText">左手0指 C · 右手握拳↓</span></div>
      <div class="action-window" id="actionWindow"><div class="action-center"><span class="action-pointer">▼</span></div><div class="action-rail" id="actionRail" aria-label="依箭头顺序完成和弦与上下扫弦"></div></div>
-     <div class="track-legend">数字＝左手伸出手指数 · 右手握拳↓ / 五指张开↑ · 同方向重复前先松手到 1～3 指</div>
+     <div class="track-legend">🔒 仅正确完成当前动作才前进 · 左手数字=和弦 · 右手拳↓ / 张开↑ · 不自动放音或跳拍</div>
     </div>
     <div class="song-footer"><div class="progress"><span id="progressFill"></span></div><span class="footer-meta" id="songMeta">0 / 0 个动作 · 简化练习</span></div>
    </section>
@@ -180,7 +183,7 @@ body{overflow:hidden}#app{width:100vw;height:100vh;height:100dvh;display:flex;fl
 [00:00.00]第一句
 [00:04.20]第二句"></textarea>
   <div class="editor-buttons"><label class="editor-file">导入 .lrc / .txt <input type="file" id="lyricFile" accept=".lrc,.txt,text/plain" hidden /></label><button id="saveLyricsBtn" class="editor-save">保存歌词</button><button id="clearLyricsBtn">清空歌词</button></div>
-  <div class="editor-audio"><strong>🎵 自选歌曲音乐（可选）</strong><p>可以导入你本机拥有合法使用权的歌曲音频（MP3 / M4A / WAV）。未导入时播放内置简化节拍伴奏；导入音频后歌词的 LRC 时间戳跟随音频进度。</p><div class="editor-buttons"><label class="editor-file">选择本地音频 <input type="file" id="audioFile" accept="audio/*,.mp3,.m4a,.wav" hidden /></label><button id="clearAudioBtn">移除音频</button><span id="audioLabel" class="audio-label">当前：合成节拍伴奏</span></div></div>
+  <div class="editor-audio"><strong>🎵 自选歌曲音乐（可选）</strong><p>可以导入你本机拥有合法使用权的歌曲音频（MP3 / M4A / WAV）。本版严格闯关：按「开始」不会自动播放伴奏或所导入音频；只有双手动作正确才发出当前和弦音。导入音频保留为以后人工试听素材；歌词进度由成功的动作控制。</p><div class="editor-buttons"><label class="editor-file">选择本地音频 <input type="file" id="audioFile" accept="audio/*,.mp3,.m4a,.wav" hidden /></label><button id="clearAudioBtn">移除音频</button><span id="audioLabel" class="audio-label">当前：合成节拍伴奏</span></div></div>
   <label class="offset-row">LRC 歌词偏移（秒）<input id="lyricOffset" type="number" min="-30" max="30" step="0.5" value="0" /> <small>歌词比音乐快/慢时可调整</small></label>
  </div>
 </div>
@@ -206,12 +209,12 @@ const DATA = {
   guitar: { name:'吉他', strings:['E2','A2','D3','G3','B3','E4'], shapes:{ C:[-1,3,2,0,1,0],G:[3,2,0,0,0,3],Am:[-1,0,2,2,1,0],Am7:[-1,0,2,0,1,0],F:[1,3,3,2,1,1],Dm:[-1,-1,0,2,3,1],Em:[0,2,2,0,0,0],Dm7:[-1,-1,0,2,1,1],D9:[-1,5,4,5,5,5],Fm:[1,3,3,1,1,1],Gm:[3,5,5,3,3,3],A:[-1,0,2,2,2,0],D7:[-1,-1,0,2,1,2],Bm7b5:[-1,2,3,2,3,-1],E:[0,2,2,1,0,0],D:[-1,-1,0,2,3,2] } }
 };
 // 《我不难过》已替换为用户本次上传的单页歌词和和弦排版（非旧版两页简谱）。
-// 原图未标示录音时间戳或扫弦节奏；每行歌词暂按一个4/4练习小节，双手动作顺序为训练编排，并非原曲精准谱。
+// 原图未标示录音时间戳或扫弦节奏；本版严格以谱上出现的和弦顺序为训练关卡：每个谱面和弦需手势成功一次才进入下一个；上下扫方向采用交替↓↑练习方案，非原曲指定的节奏。
 const SAD_BARS = [["C","Em"],["Am7","D7"],["C","Em"],["Am7","D7"],["Fm"],["C","Em"],["Gm","A","Dm"],["Fm","Em","Am"],["D7"],["Fm"],["C","Em"],["Gm","A","Dm"],["Fm","Em"],["Am7","D7","G"],["C","Em"],["Am"],["Fm","Em"],["Am"],["C","Em"],["Gm","A","Dm"],["Fm","Em","Am"],["D7"],["Fm"],["C","Em"],["Gm","A","Dm"],["Fm","Em"],["Am7","D7","G"],["C","Em"],["Am7","D7","G"]];
 const SAD_LYRICS = ["又站在你家的门口 我们重复沉默","这样子单方面的守候 还能多久","终于你开口向我诉说 她有多温柔","虽然你还握着我的手","但我已不在 你心中","我真的懂 你不是喜新厌旧","是我没有 陪在你身边当你寂寞时候","别再看着我说着 你爱过 别太伤痛","我不难过 这不算什么","只是为什么眼泪会流 我也不懂","就让我走 让我开始享受自由","回忆很多 你的影子也会充满我生活","我并不懦弱 你比谁都懂","虽然寂寞 这会是我 最后的宽容","抱紧我 再抱紧我","这一份感动 请你让我留在胸口","别再说是你的错 爱到了尽头","是非对错 就让它随风","我真的懂 你不是喜新厌旧","是我没有 陪在你身边当你寂寞时候","别再看着我说着 你爱过 别太伤痛","我不难过 这不算什么","只是为什么眼泪会流 我也不懂","就让我走 让我开始享受自由","回忆很多 你的影子也会充满我生活","我并不懦弱 你比谁都懂","虽然寂寞 这会是我 最后的宽容","不要再握我的手 离开你以后","才知道 自由是 真正的自由"];
 
 const SONGS = {
- not_sad:{name:'我不难过',artist:'孙燕姿',bpm:88,capo:0,bars:SAD_BARS,pattern:['D','','D','U','','U','D','U'],source:'用户本次提供的单页和弦歌词（按行练习；未附原唱时间轴）'},
+ not_sad:{name:'我不难过',artist:'孙燕姿',bpm:88,capo:0,bars:SAD_BARS,pattern:['D','','D','U','','U','D','U'],source:'用户最新歌词和弦图：按谱面和弦出现顺序逐个闯关；↓↑为练习编排，不是原曲节拍' },
  old_date:{name:'老派约会之必要',artist:'MC 张天赋',bpm:92,bars:['C','G','Am','C','F','Em','F','G'],pattern:['D','','','U','D','','D','U']},
  love:{name:'情非得已',artist:'庾澄庆',bpm:100,bars:['C','G','Am','Em','F','Em','F','G'],pattern:['D','U','','U','D','U','','U']}
 };
@@ -220,8 +223,8 @@ const state = {
  videoBusy:false,lastFrame:0,reqFrame:0, audio:null,master:null,samples:new Map(),
  playing:false,step:0,bpm:88,actions:[],audioReady:false,
  swapHands:true,
-  left:{lastSeen:0,count:null,candidate:null,since:0,raw:null,frames:0},
-  right:{lastSeen:0,raw:null,gesture:null,candidate:null,since:0,frames:0,lastEvent:0,lastDirection:null},
+  left:{lastSeen:0,count:null,candidate:null,since:0,raw:null,frames:0,present:false},
+  right:{lastSeen:0,raw:null,gesture:null,candidate:null,since:0,frames:0,lastEvent:0,lastDirection:null,present:false},
   strumVerdict:'pending',strumMessage:'右手扫弦：等待握拳↓或张开↑',strumVerdictAt:0,pendingStrum:null,
  lastRender:'',lastSound:0,
  mode:'sing',singElapsed:0,singBaseMs:0,singTimer:null,singInterval:null,lastBeat:-1,
@@ -264,7 +267,7 @@ function pluck(freq,start,velocity=0.58){const ctx=state.audio;if(!ctx)return;co
  const src=ctx.createBufferSource();src.buffer=buffer;const gain=ctx.createGain(),lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=uke?3300:2600;gain.gain.setValueAtTime(0.0001,start);gain.gain.exponentialRampToValueAtTime(Math.max(.0001,velocity),start+.014);gain.gain.exponentialRampToValueAtTime(.0001,start+duration-.02);src.connect(lp);lp.connect(gain);gain.connect(state.master||ctx.destination);src.start(start);src.stop(start+duration);src.onended=()=>{try{src.disconnect();lp.disconnect();gain.disconnect()}catch(e){}}}
 // 左手用手指数控制目标和弦；右手握拳代表下扫、张开代表上扫。
 function recognizedChord(){
- if(!state.camera||!state.hands||state.left.count===null||performance.now()-state.left.lastSeen>850)return null;
+ if(!state.camera||!state.hands||!state.left.present||!state.right.present||state.left.count===null||performance.now()-state.left.lastSeen>260)return null;
  const target=targetAction()?.chord;return target&&state.left.count===fingerFor(target)?target:(CHORDS[state.left.count]||null);
 }
 function targetAction(){return state.actions[Math.min(state.step,state.actions.length-1)]||null}
@@ -287,9 +290,23 @@ function chordDiagramSVG(chord){const inst=DATA[state.instrument],shape=inst.sha
  svg+=`<text x="74" y="156" text-anchor="middle" fill="#8fa8c9" font-size="10">${inst.strings.join('  ')}</text></svg>`;return svg}
 function getSong(){return SONGS[state.song]}
 // 每一个非空扫弦拍都成为一个独立练习动作。中间固定箭头表示此刻必须做的动作。
-function makeActions(song){const out=[];song.bars.forEach((item,bar)=>song.pattern.forEach((dir,slot)=>{
- const chord=chordForBar(item,slot);if(dir)out.push({chord,fingers:fingerFor(chord),direction:dir,bar,slot});
-}));return out;}
+function makeActions(song){
+ const out=[];
+ if(song===SONGS.not_sad){
+  // 最新上传的词谱只给出了每行和弦的先后次序，没有精确上下扫/时值。
+  // 因此每一个谱面和弦 = 一个必须正确完成的训练拍，绝不按墙钟跳拍。
+  song.bars.forEach((line,bar)=>{
+   const chords=Array.isArray(line)?line:[line];
+   chords.forEach((chord,pos)=>out.push({chord,fingers:fingerFor(chord),direction:out.length%2===0?'D':'U',bar,slot:Math.floor(pos*8/chords.length),chordNumber:pos+1,chordsInLine:chords.length}));
+  });
+ }else{
+  song.bars.forEach((item,bar)=>song.pattern.forEach((dir,slot)=>{
+   if(!dir)return;const chord=chordForBar(item,slot);
+   out.push({chord,fingers:fingerFor(chord),direction:dir,bar,slot});
+  }));
+ }
+ return out;
+}
 // 弹唱歌词：支持逐小节文本（歌词自行粘贴）与标准 LRC 毫秒时间戳。
 function lyricStoreKey(song){return 'finger-sing-lyrics-v2-'+song}
 function parseLyricText(source){
@@ -305,20 +322,19 @@ function parseLyricText(source){
  if(timed.length){timed.sort((a,b)=>a.time-b.time);return {type:'lrc',lines:timed}}
  return {type:'bars',lines:rows.filter(x=>!/^\[[a-z]+:/i.test(x)).map(text=>({text}))};
 }
-function getLyricSeconds(){const a=$('songAudio');
- if(state.mode==='sing'&&state.playing){if(state.audioSong===state.song&&state.audioObject&&a.src)return a.currentTime||0;return Math.max(0,(performance.now()-state.singBaseMs)/1000)}
- if(state.mode==='sing'&&state.audioSong===state.song&&state.audioObject)return a.currentTime||state.singElapsed;
- return state.mode==='sing'?state.singElapsed:((targetAction()?.bar||0)*4+(targetAction()?.slot||0)/2)*60/state.bpm;
+function getLyricSeconds(){
+ // LRC 仅按已完成的练习动作估算，不读取自动流逝的时间或自动播放音频。
+ const completed=state.actions.slice(0,Math.min(state.step,state.actions.length));
+ return completed.length*(60/Math.max(1,state.bpm));
 }
 function lyricCursor(data){if(!data||!data.lines.length)return -1;
  if(data.type==='lrc'){
   const seconds=getLyricSeconds()+(Number(state.lyricOffset[state.song])||0);
-  let index=-1;for(let i=0;i<data.lines.length;i++){if(data.lines[i].time<=seconds)index=i;else break}
-  return index;
+  let i=-1;for(let k=0;k<data.lines.length;k++){if(data.lines[k].time<=seconds)i=k;else break}return Math.max(0,i);
  }
- // 每行对应一个小节；少于 8 行时循环使用；更多歌词可使用 LRC 与本地音频做精确时间同步。
- let bar=state.mode==='sing'?Math.floor(getLyricSeconds()/(4*60/state.bpm))%getSong().bars.length:(targetAction()?.bar ?? (getSong().bars.length-1));
- return Math.max(0,bar) % data.lines.length;
+ // 用户所给的新词谱按歌词行匹配谱面和弦行，绝不随墙钟变化。
+ const bar=state.actions[Math.min(state.step,Math.max(0,state.actions.length-1))]?.bar ?? 0;
+ return Math.min(data.lines.length-1,Math.max(0,bar));
 }
 function renderLyrics(force=false){const data=state.lyrics[state.song]||{type:'none',lines:[]},i=lyricCursor(data);
  const key=[state.song,data.type,i,state.mode,state.step,state.playing].join('|');if(!force&&key===state.lyricRenderKey)return;state.lyricRenderKey=key;
@@ -329,7 +345,7 @@ function renderLyrics(force=false){const data=state.lyrics[state.song]||{type:'n
  if(false && state.song==='not_sad' && i>=0 && i<4 && !state.playing){
   $('lyricPrev').textContent='✓ 已换成新上传的《我不难过》歌词和弦';
   $('lyricCurrent').textContent='🎤 即将演唱：'+SAD_LYRICS[0];
-  $('lyricNext').textContent='点击开始后按歌词行显示 · 📖 可看词谱';
+  $('lyricNext').textContent='双手完成当前拍才显示下一行 · 📖 可看词谱';
   return;
  }
  $('lyricNext').textContent=i+1<data.lines.length?data.lines[i+1].text:'♪ 即将结束 / 继续跟练';
@@ -341,37 +357,14 @@ function closeLyricsDialog(){$('lyricsDialog').hidden=true}
 function saveLyrics(){const raw=$('lyricsInput').value.slice(0,60000),parsed=parseLyricText(raw);state.lyrics[state.song]={...parsed,raw};
  try{localStorage.setItem(lyricStoreKey(state.song),raw)}catch(e){toast('本机存储空间不足，歌词仅保留在本次页面中',3600)}
  state.lyricRenderKey='';renderLyrics(true);closeLyricsDialog();toast(parsed.lines.length?`已保存 ${parsed.lines.length} 行歌词（${parsed.type==='lrc'?'LRC 时间同步':'按小节同步'}）`:'已清空歌词',2500)}
-function updateAudioLabel(){$('audioLabel').textContent=state.audioObject&&state.audioSong===state.song?'已加载：'+state.audioObject.name:'当前：简化合成节拍伴奏'}
+function updateAudioLabel(){$('audioLabel').textContent=state.audioObject&&state.audioSong===state.song?'已保存（不自动播放）：'+state.audioObject.name:'当前：仅手势触发和弦（无自动伴奏）'}
 function clearImportedAudio(){const a=$('songAudio');a.pause();a.removeAttribute('src');a.load();
  if(state.audioObject){URL.revokeObjectURL(state.audioObject.url);state.audioObject=null}state.audioSong=null;updateAudioLabel();}
 function setMode(mode){if(mode!== 'sing' && mode!=='practice')return;pause();state.mode=mode;state.step=0;state.singElapsed=0;
  $('modeBtn').textContent=mode==='sing'?'🎤 弹唱':'🎯 跟练';$('modeBtn').classList.toggle('active',mode==='sing');
- state.lastRender='';renderTimeline();renderLyrics(true);toast(mode==='sing'?'弹唱：音乐和歌词按时间推进，双手动作正确才发出乐器声':'跟练：和弦与扫弦正确后才进入下一动作；歌词跟着进度',2900)}
-function clickBeat(){const ctx=state.audio;if(!ctx||ctx.state!=='running')return;
- const t=ctx.currentTime+.006,o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.setValueAtTime(1050,t);o.frequency.exponentialRampToValueAtTime(570,t+.055);
- g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.026,t+.004);g.gain.exponentialRampToValueAtTime(.0001,t+.065);o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+.075);o.onended=()=>{o.disconnect();g.disconnect()}}
-function accompanimentBeat(globalBeat){if(!state.playing||state.mode!=='sing'||(state.audioSong===state.song&&state.audioObject))return;
- const ctx=state.audio;if(!ctx||ctx.state!=='running')return;
- const bar=Math.floor(globalBeat/4)%getSong().bars.length,beat=globalBeat%4,chord=chordForBar(getSong().bars[bar],beat<2?0:4),notes=getNotes(chord);
- clickBeat();
- // 以极轻的低音及分解和弦组成原创示范伴奏，不模拟或包含原曲录音/旋律。
- if(beat===0||beat===2){pluck(notes[0],ctx.currentTime+.009,.115);if(beat===0&&notes.length>1)pluck(notes[1],ctx.currentTime+.085,.057)}
- else{pluck(notes[notes.length-1],ctx.currentTime+.010,.065)}
-}
-function tickSing(){if(!state.playing||state.mode!=='sing')return;
- const player=$('songAudio'),uploaded=state.audioSong===state.song&&state.audioObject;
- const sec=uploaded?(player.currentTime||0):Math.max(0,(performance.now()-state.singBaseMs)/1000);
- state.singElapsed=sec;
- const beatTime=60/state.bpm,beat=Math.floor(sec/beatTime);
- if(!uploaded){for(let b=state.lastBeat+1;b<=beat&&b<=state.lastBeat+4;b++){accompanimentBeat(b)}state.lastBeat=beat;}
- const totalSlots=getSong().bars.length*8,currentSlot=Math.floor(sec/(beatTime/2))%totalSlots;
- let idx=0;for(let i=0;i<state.actions.length;i++){const a=state.actions[i];if((a.bar*8+a.slot)<=currentSlot)idx=i;else break}
- if(state.step!==idx){state.step=idx;state.lastRender='';renderTimeline()}else{
- const loop=beatTime*4*getSong().bars.length;$('progressFill').style.width=`${((sec%loop)/loop*100).toFixed(1)}%`;
- $('songMeta').textContent=`🎤 ${formatSeconds(sec)} · ${uploaded?'本地音频':(state.song==='not_sad'?'新词谱简化伴奏 · 标准音高':'循环简化伴奏')}`;
- }
- renderLyrics();
-}
+ state.lastRender='';renderTimeline();renderLyrics(true);toast('🔒 '+(mode==='sing'?'弹唱':'跟练')+'严格闯关：无自动伴奏；每个和弦和扫弦正确才进入下一拍',3500)}
+// 严格闯关版没有自动伴奏、节拍音、计时推进器：声音只由 handleRightStrum -> strum 发出。
+// 用户主动点“🔊 试音”是唯一的例外，便于检查浏览器音频权限。
 function formatSeconds(s){return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`}
 function setVerdict(id,status,message){const el=$(id);el.textContent=message;el.classList.remove('good','bad','pending');el.classList.add(status);}
 function renderChord(){
@@ -385,7 +378,7 @@ function renderChord(){
  setVerdict('chordMatch',!valid?'pending':good?'good':'bad',!valid?`左手：目标 ${target}（${fingerFor(target)} 指）`:
   good?`✓ 左手正确：${actual} · ${state.left.count} 指`:`✕ 左手错误：${actual}，需要 ${target}`);
  setVerdict('strumMatch',state.strumVerdict,state.strumMessage);
- $('gateStatus').textContent=good?'左手已就绪':'等待左手';$('gateStatus').classList.toggle('ready',good);
+ $('gateStatus').textContent=good&&state.left.present&&state.right.present?'✓ 双手在画面':'🔒 等待双手';$('gateStatus').classList.toggle('ready',good&&state.left.present&&state.right.present);
  document.querySelectorAll('.chord-key').forEach(el=>{
   const index=Number(el.dataset.fingers),label=(fingerFor(target)===index&&!CHORDS.includes(target))?target:CHORDS[index];
   el.dataset.chord=label;el.querySelector('strong').textContent=sheetName(label);
@@ -411,10 +404,10 @@ function buildActionRail(){const rail=$('actionRail');rail.innerHTML='';
  el.innerHTML=`<span class="number">${a.fingers}</span><span class="action-details"><strong>${sheetName(a.chord)}</strong><i>${a.direction==='D'?'↓':'↑'}</i></span>`;
  rail.appendChild(el)});}
 function renderTimeline(){const action=targetAction(),n=state.actions.length,done=state.step>=n;
- $('positionText').textContent=done?'练习完成！':`第 ${action.bar+1}/${getSong().bars.length} 小节 · 第 ${Math.floor(action.slot/2)+1} 拍`;
+ $('positionText').textContent=done?'练习完成！':`第 ${action.bar+1}/${getSong().bars.length} 行 · 第 ${state.step+1}/${n} 个动作（必须完成）`;
  $('cueText').textContent=done?'✓ 所有动作已完成':`左手 ${action.fingers} 指 ${action.chord} · 右手 ${action.direction==='D'?'握拳↓':'五指张开↑'}`;
  $('progressFill').style.width=`${(n?state.step/n*100:0).toFixed(2)}%`;
- $('songMeta').textContent=state.mode==='sing'?`🎤 ${formatSeconds(state.singElapsed)} · ${state.song==='not_sad'?'新词谱 · 标准音高':'简化'}${state.audioObject?'音乐':'伴奏'}`:`${state.step} / ${n} 个动作 · 手势跟练`;
+ $('songMeta').textContent=`🔒 ${state.step} / ${n} 完成 · 手势正确才前进 · 无自动音`;
  const children=$('actionRail').children;
  for(let i=0;i<children.length;i++){children[i].classList.toggle('current',i===state.step);children[i].classList.toggle('past',i<state.step)}
  alignTrack();renderChord();renderLyrics();
@@ -431,9 +424,9 @@ function setStrumFeedback(status,msg){
 function flushPendingStrum(now){
  const p=state.pendingStrum;
  if(!p)return;
- if(now-p.at>450||p.step!==state.step||!state.playing){state.pendingStrum=null;return}
+ if(now-p.at>350||p.step!==state.step||!state.playing||!state.left.present||!state.right.present||state.right.gesture!==p.dir){state.pendingStrum=null;return}
  const action=targetAction();
- if(action&&state.left.count===fingerFor(action.chord)){
+ if(action&&state.camera&&state.hands&&state.left.count===fingerFor(action.chord)){
   state.pendingStrum=null;handleRightStrum(p.dir,now,true);
  }
 }
@@ -441,6 +434,7 @@ function handleRightStrum(dir,now,fromPending=false){
  state.right.lastDirection=dir;
  if(!state.playing){setStrumFeedback('pending','已识别右手'+(dir==='D'?'握拳↓':'张开↑')+'，请点「▶ 开始」');return}
  const action=targetAction();if(!action)return;
+ if(!state.camera||!state.hands||!state.left.present||!state.right.present){setStrumFeedback('pending','⏳ 未同时检测到左右手：不能发声，也不能进入下一拍');return}
  if(dir!==action.direction){setStrumFeedback(false,`✕ 右手${dir==='D'?'握拳↓':'张开↑'}，当前要求${action.direction==='D'?'握拳↓':'张开↑'}；请转换姿态重试`);return}
  if(!gateForChord(action.chord)){
   if(!fromPending&&state.left.candidate===fingerFor(action.chord)&&now-state.left.lastSeen<650){
@@ -459,45 +453,31 @@ function handleRightStrum(dir,now,fromPending=false){
   setStrumFeedback(false,'✕ 音频播放失败，请点击「🔊 试音」检查');return;
  }
  setStrumFeedback(true,`✓ 左手 ${action.chord} · 右手${dir==='D'?'握拳↓':'张开↑'}，已发声`);
- if(state.mode==='practice'){
-  state.step++;state.lastRender='';
-  if(state.step>=state.actions.length){pause();toast('恭喜！全部动作都完成了。',2600)}
-  renderTimeline();
- }else{state.lastRender='';renderChord()}
+ // 弹唱、跟练均严格按成功的手势一次只推进一个训练拍。
+ state.step++;state.lastRender='';state.pendingStrum=null;
+ if(state.step>=state.actions.length){pause();toast('恭喜！所有动作都已正确完成。',2800)}
+ renderTimeline();
 }
 async function play(){
  if(state.playing){pause();return}
- const ctx=await unlockAudio();if(!ctx){toast('声音尚未启用：请点击 🔊 试音 再开始。',3600);return}
- if(state.mode==='practice'&&(!state.camera||!state.hands)){toast('请先开启摄像头，识别双手后再开始跟练。可先点 🔊 试音 判断声音是否正常。',4400);return}
+ if(!state.camera||!state.hands){toast('请先打开摄像头，确认手势模型已加载，然后点击开始。没有双手时不会发声。',4600);return}
+ const ctx=await unlockAudio();if(!ctx){toast('请先点「🔊 试音」允许手机播放声音，再点击开始。',4200);return}
  if(state.step>=state.actions.length)state.step=0;
- if(state.mode==='sing'){
-  const a=$('songAudio'),uploaded=state.audioSong===state.song&&state.audioObject;
-  if(uploaded){
-   try{if(Math.abs(a.currentTime-state.singElapsed)>.6)a.currentTime=state.singElapsed;await a.play()}
-   catch(e){toast('本地音乐无法播放，请检查格式或换一首音频。',4200);return}
-  }
-  state.singBaseMs=performance.now()-state.singElapsed*1000;
-  state.lastBeat=Math.floor(state.singElapsed/(60/state.bpm))-1;
-  state.playing=true;
-  state.singInterval=setInterval(tickSing,75);tickSing();
- }else state.playing=true;
- state.strumVerdict='pending';state.strumMessage='右手握拳↓ / 张开↑：等待对应动作';state.pendingStrum=null;state.lastRender='';
+ // 特别注意：开始只改变 waiting 状态，禁止播放歌曲、节拍、伴奏或推进时间轴。
+ $('songAudio').pause();state.playing=true;state.pendingStrum=null;
+ state.strumVerdict='pending';state.strumMessage='🔒 已开始：请先做对左手和弦，再用右手拳头↓/五指↑触发本拍';state.lastRender='';
  $('playBtn').textContent='⏸ 暂停';renderTimeline();
- toast(state.mode==='sing'?'🎤 音乐与歌词开始推进。左手按数字选和弦，右手握拳↓／张开↑触发发声。':'🎯 左手比目标数字，右手握拳↓／张开↑；两手正确才推进。',3000);
+ toast('🔒 开始后静音等待：只有左手和弦＋右手扫弦都对，才响一拍并前进一步。',3600);
 }
 function pause(){
- if(state.mode==='sing'&&state.playing){
-  const a=$('songAudio');if(state.audioSong===state.song&&state.audioObject)state.singElapsed=a.currentTime||state.singElapsed;
-  else state.singElapsed=Math.max(0,(performance.now()-state.singBaseMs)/1000);
- }
  state.playing=false;state.pendingStrum=null;
  if(state.singInterval!==null){clearInterval(state.singInterval);state.singInterval=null}
  $('songAudio').pause();$('playBtn').textContent='▶ 开始 / 继续';
 }
-function changeTempo(){const vals=[68,76,88,96,106,120];const idx=vals.indexOf(state.bpm);const newBpm=vals[(idx+1)%vals.length];
- const was=state.mode==='sing'&&state.playing;if(was)pause();state.bpm=newBpm;
- $('tempoBtn').textContent='♩ '+state.bpm;toast('速度已更新。弹唱合成伴奏使用该 BPM；导入的真实音频不会自动变速。',2700);
- if(was)play();}
+function changeTempo(){const vals=[60,72,84,96,108];const idx=vals.indexOf(state.bpm);
+ state.bpm=vals[(idx+1)%vals.length];$('tempoBtn').textContent='♩ '+state.bpm;
+ toast('BPM 仅供参考：练习由手势驱动，不会自动走拍，也不会自动播放节拍声。',3000);
+}
 // Hands 通过公开的 MediaPipe 模型跟踪关键点。这里只能估算伸出手指数并映射和弦，不能识别真实指板按弦。
 const HAND_CONNECTIONS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[0,17],[17,18],[18,19],[19,20]];
 function d(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
@@ -562,8 +542,12 @@ function processHands(results){
  }
  // 某些机型不报告 handedness，此时只展示、不把未知手当成任何一只手。
  const right=assigned.Right,left=assigned.Left;
- if(right){drawHand(ctx,right,'右手 · 扫弦','#ffbd79',canvas.width,canvas.height);trackRight(right,now)}
+ // 是否在“当前帧”确实看到两只手，绝不拿旧帧的残留手势触发演奏。
+ state.left.present=!!left;state.right.present=!!right;
+ if(!left||!right)state.pendingStrum=null;
+ // 先更新和弦，再检测扫弦，避免右手事件读取上一帧的旧左手姿态。
  if(left){drawHand(ctx,left,'左手 · 和弦','#6af1a7',canvas.width,canvas.height);trackLeft(left,now)}
+ if(right){drawHand(ctx,right,'右手 · 扫弦','#ffbd79',canvas.width,canvas.height);trackRight(right,now)}
  if(!left&&now-state.left.lastSeen>750){state.left.count=null;state.left.candidate=null;state.left.raw=null;state.pendingStrum=null;state.lastRender=''}
  if(!right&&now-state.right.lastSeen>750){state.right.gesture=null;state.right.candidate=null;state.right.raw=null;state.right.frames=0;state.lastRender=''}
  const action=targetAction();
@@ -586,8 +570,8 @@ function stopCamera(){
  pause();state.camera=false;cancelAnimationFrame(state.reqFrame);const v=$('video');
  if(state.stream){state.stream.getTracks().forEach(t=>t.stop());state.stream=null}
  v.pause();v.srcObject=null;const can=$('overlay');can.getContext('2d').clearRect(0,0,can.width,can.height);
- state.left={lastSeen:0,count:null,candidate:null,since:0,raw:null,frames:0};
- state.right={lastSeen:0,raw:null,gesture:null,candidate:null,since:0,frames:0,lastEvent:0,lastDirection:null};
+ state.left={lastSeen:0,count:null,candidate:null,since:0,raw:null,frames:0,present:false};
+ state.right={lastSeen:0,raw:null,gesture:null,candidate:null,since:0,frames:0,lastEvent:0,lastDirection:null,present:false};
  state.strumVerdict='pending';state.strumMessage='右手扫弦：等待握拳↓/张开↑';state.lastRender='';state.videoBusy=false;
  $('cameraHelp').style.display='flex';$('cameraBtn').textContent='◉ 开启摄像头';setStatus('未开启摄像头');
  $('fingerText').textContent='左手：等待和弦 · 右手：等待扫弦';renderChord();
@@ -606,7 +590,7 @@ function attach(){
  $('swapHandsBtn').setAttribute('aria-pressed',String(!state.swapHands));
  $('swapHandsBtn').addEventListener('click',()=>{
   state.swapHands=!state.swapHands;try{localStorage.setItem('swapHands',state.swapHands)}catch(e){}
-  state.left={lastSeen:0,count:null,candidate:null,since:0,raw:null,frames:0};state.right={lastSeen:0,raw:null,gesture:null,candidate:null,since:0,frames:0,lastEvent:0,lastDirection:null};state.pendingStrum=null;
+  state.left={lastSeen:0,count:null,candidate:null,since:0,raw:null,frames:0,present:false};state.right={lastSeen:0,raw:null,gesture:null,candidate:null,since:0,frames:0,lastEvent:0,lastDirection:null,present:false};state.pendingStrum=null;
   state.lastRender='';$('swapHandsBtn').setAttribute('aria-pressed',String(!state.swapHands));
   toast('左右手识别已对调。请伸起右手，确认画面上它被标为「右手 · 扫弦」。',3800);renderChord();
  });
@@ -636,9 +620,9 @@ function attach(){
   pause();clearImportedAudio();const url=URL.createObjectURL(file);
   state.audioObject={url,name:file.name};state.audioSong=state.song;state.singElapsed=0;
   const audio=$('songAudio');audio.src=url;audio.load();state.lyricRenderKey='';updateAudioLabel();renderLyrics(true);
-  toast('已读取本地歌曲音频。切换到弹唱模式并点击开始即可播放。',2800);e.target.value='';
+  toast('已保存本地音乐。但严格闯关模式不会自动播放音频，避免无手势时发声。',2800);e.target.value='';
  });
- $('clearAudioBtn').addEventListener('click',()=>{pause();clearImportedAudio();state.singElapsed=0;toast('已切换为内置简化节拍伴奏',1800)});
+ $('clearAudioBtn').addEventListener('click',()=>{pause();clearImportedAudio();state.singElapsed=0;toast('已移除音频；严格闯关无自动伴奏',1800)});
  $('lyricOffset').addEventListener('change',e=>{let value=Math.max(-30,Math.min(30,Number(e.target.value)||0));state.lyricOffset[state.song]=value;e.target.value=value;
   try{localStorage.setItem('lyric-offset-'+state.song,value)}catch(e){}state.lyricRenderKey='';renderLyrics(true)});
  $('songAudio').addEventListener('ended',()=>{if(state.mode==='sing'&&state.playing){pause();state.singElapsed=0;state.step=0;renderTimeline();toast('歌曲播放结束',2600)}});
