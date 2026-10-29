@@ -123,7 +123,7 @@ body{overflow:hidden}#app{width:100vw;height:100vh;height:100dvh;display:flex;fl
 <body>
 <div id="app">
  <header class="topbar">
-  <div class="brand"><div class="brand-mark">♫</div><div><h1>指尖和弦</h1><small>LANDSCAPE · 《我不难过》已换新词谱 · 双手识别</small></div></div>
+  <div class="brand"><div class="brand-mark">♫</div><div><h1>指尖和弦</h1><small>LANDSCAPE · 双手识别 · 扫弦诊断修复版</small></div></div>
   <div class="pillbar" role="group" aria-label="乐器音色"><button class="seg active" id="inst-uke" type="button">尤克里里</button><button class="seg" id="inst-guitar" type="button">吉他</button></div>
   <label class="select-wrap"><span>曲目</span><select id="songSelect" aria-label="选择练习曲"><option value="not_sad">我不难过</option><option value="old_date">老派约会之必要</option><option value="love">情非得已</option></select></label>
   <button class="mini-btn" id="flipBtn" title="切换前后摄像头">⟳ <span class="hide-xs">切换镜头</span></button>
@@ -133,7 +133,7 @@ body{overflow:hidden}#app{width:100vw;height:100vh;height:100dvh;display:flex;fl
   <section class="pane camera-pane" aria-label="手势检测摄像头区域">
    <video id="video" autoplay playsinline webkit-playsinline muted></video><canvas id="overlay"></canvas>
    <div class="cam-head"><div class="hud-tag"><span id="statusDot" class="status-dot"></span><span id="camStatus">未开启摄像头</span></div><button type="button" class="hud-tag swap-btn" id="swapHandsBtn" title="如果左右手识别相反，点击对调">⇄ 左右手对调</button></div>
-   <div id="cameraHelp" class="camera-help"><div class="bigcam">✋</div><strong>用手势演奏和弦</strong><p>开启摄像头，同时放入双手：<br><b>右手</b>伸出目标和弦的手指数；<b>左手</b>向上或向下移动做扫弦。<br>两手动作都正确，才会发声并前进。</p><div class="tap">点击右上角「开启摄像头」</div></div>
+   <div id="cameraHelp" class="camera-help"><div class="bigcam">✋</div><strong>用手势演奏和弦</strong><p>开启摄像头，同时放入双手：<br><b>右手</b>伸出目标和弦的手指数；<b>左手</b>向上或向下移动做扫弦。<br>先点「🔊 试音」确认扬声器可用，再点「▶ 开始」。<br>手势正确才会发声；左下角可看到扫弦位移与失败原因。</p><div class="tap">点击右上角「开启摄像头」</div></div>
    <div class="cam-bottom"><div class="hand-info"><strong id="fingerText">右手：等待和弦 · 左手：等待扫弦</strong><small id="gestureText">C＝握拳0指 · G＝伸出1指；左手按箭头扫弦</small></div><div class="legend" id="audioStatus">🔇 声音未测试 · 点右侧「🔊 试音」</div></div>
    <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </section>
@@ -210,9 +210,9 @@ const state = {
  instrument:'uke',song:'not_sad',capo:0,camera:false,stream:null,facing:'user',hands:null,
  videoBusy:false,lastFrame:0,reqFrame:0, audio:null,master:null,samples:new Map(),
  playing:false,step:0,bpm:88,actions:[],audioReady:false,
- swapHands:true, right:{lastSeen:0,count:null,candidate:null,since:0},
- left:{lastSeen:0,palmY:null,anchorY:null,anchorAt:0,scale:.15,lastEvent:0,lastDirection:null},
- strumVerdict:'pending',strumMessage:'左手扫弦：等待动作',strumVerdictAt:0,
+ swapHands:true, right:{lastSeen:0,count:null,candidate:null,since:0,raw:null},
+ left:{lastSeen:0,palmY:null,anchorY:null,anchorAt:0,scale:.15,lastEvent:0,lastDirection:null,movement:0},
+ strumVerdict:'pending',strumMessage:'左手扫弦：等待动作',strumVerdictAt:0,pendingStrum:null,
  lastRender:'',lastSound:0,
  mode:'sing',singElapsed:0,singBaseMs:0,singTimer:null,singInterval:null,lastBeat:-1,
  lyrics:{},lyricOffset:{},audioObject:null,audioSong:null,lyricRenderKey:''
@@ -240,7 +240,7 @@ async function unlockAudio(){
  const ctx=ensureAudio();if(!ctx)return null;
  try{if(ctx.state!=='running')await ctx.resume()}catch(e){console.warn('audio resume failed',e)}
  if(ctx.state!=='running'){setAudioStatus('🔇 浏览器阻止声音 · 点 🔊 试音');return null}
- setAudioStatus('🔊 音频已开启 · 需要正确双手动作才会扫弦',true);return ctx;
+ setAudioStatus('🔊 音频已开启 · 等待正确扫弦',true);return ctx;
 }
 async function testSound(){
  const ctx=await unlockAudio();if(!ctx){toast('声音仍受限制。请用 Safari/Chrome 打开 HTTPS 网站，点击试音，并检查媒体音量。',4800);return}
@@ -254,7 +254,7 @@ function pluck(freq,start,velocity=0.58){const ctx=state.audio;if(!ctx)return;co
  const src=ctx.createBufferSource();src.buffer=buffer;const gain=ctx.createGain(),lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=uke?3300:2600;gain.gain.setValueAtTime(0.0001,start);gain.gain.exponentialRampToValueAtTime(Math.max(.0001,velocity),start+.014);gain.gain.exponentialRampToValueAtTime(.0001,start+duration-.02);src.connect(lp);lp.connect(gain);gain.connect(state.master||ctx.destination);src.start(start);src.stop(start+duration);src.onended=()=>{try{src.disconnect();lp.disconnect();gain.disconnect()}catch(e){}}}
 // 右手控制目标和弦，左手做真正的上下位移动作；缺少任意一只手都不放音、不前进。
 function recognizedChord(){
- if(!state.camera||!state.hands||state.right.count===null||performance.now()-state.right.lastSeen>750)return null;
+ if(!state.camera||!state.hands||state.right.count===null||performance.now()-state.right.lastSeen>1000)return null;
  const target=targetAction()?.chord;return target&&state.right.count===fingerFor(target)?target:(CHORDS[state.right.count]||null);
 }
 function targetAction(){return state.actions[Math.min(state.step,state.actions.length-1)]||null}
@@ -262,11 +262,14 @@ function gateForChord(target){return recognizedChord()===target}
 function strum(direction,chord){
  if(!state.playing||!state.camera||!gateForChord(chord))return false;
  const action=targetAction();if(!action||action.chord!==chord||action.direction!==direction)return false;
- const ctx=state.audio;if(!ctx||ctx.state!=='running'){setAudioStatus('🔇 请先点击 🔊 试音 解锁声音');return false;}
- const notes=getNotes(chord),list=direction==='U'?[...notes].reverse():notes;
- const now=ctx.currentTime+.012;
- list.forEach((f,i)=>pluck(f,now+i*(state.instrument==='uke'?.02:.027),state.instrument==='uke'?.40:.30));
- state.lastSound=performance.now();setAudioStatus('🔊 已演奏 '+chord+' '+(direction==='D'?'↓':'↑'),true);return true;
+ const ctx=state.audio;if(!ctx||ctx.state!=='running'){
+  setAudioStatus('🔇 浏览器音频未运行 · 请用手指点击「🔊 试音」');return false;
+ }
+ try{
+  const notes=getNotes(chord),list=direction==='U'?[...notes].reverse():notes,now=ctx.currentTime+.012;
+  list.forEach((f,i)=>pluck(f,now+i*(state.instrument==='uke'?.02:.027),state.instrument==='uke'?.47:.36));
+  state.lastSound=performance.now();setAudioStatus('🔊 已演奏 '+chord+' '+(direction==='D'?'↓':'↑'),true);return true;
+ }catch(e){console.error('strum audio error',e);setAudioStatus('🔇 音符播放失败：'+e.message);return false}
 }
 function chordDiagramSVG(chord){const inst=DATA[state.instrument],shape=inst.shapes[chord],count=shape.length;const left=22,right=126,top=36,bottom=137;const step=(right-left)/(count-1);const max=Math.max(...shape);const positives=shape.filter(x=>x>0);const base=max>4?Math.max(1,Math.min(...positives)-1):1;const nfrets=4;let svg=`<svg viewBox="0 0 148 163" role="img" aria-label="${inst.name} ${chord} 指法图"><text x="74" y="15" fill="#adbdd9" text-anchor="middle" font-size="11">${count} 弦 · ${base===1?'第 1 品起':`第 ${base} 品起`}</text>`;
  for(let j=0;j<nfrets+1;j++){const y=top+j*(bottom-top)/nfrets;svg+=`<line x1="${left}" x2="${right}" y1="${y}" y2="${y}" stroke="${j===0&&base===1?'#d6d6ed':'#7587a4'}" stroke-width="${j===0&&base===1?4:1.8}"/>`}
@@ -385,7 +388,7 @@ function initChords(){
  el.innerHTML=`${i}指 <strong>${chord}</strong>`;el.title=`右手 ${i} 指表示 ${chord}`;holder.appendChild(el)});
 }
 function setSong(key){if(!SONGS[key])return;pause();state.song=key;state.bpm=getSong().bpm;state.step=0;
- state.capo=getSong().capo||0;state.actions=makeActions(getSong());state.lastRender='';state.strumVerdict='pending';state.strumMessage='左手扫弦：等待动作';
+ state.capo=getSong().capo||0;state.actions=makeActions(getSong());state.pendingStrum=null;state.lastRender='';state.strumVerdict='pending';state.strumMessage='左手扫弦：等待动作';
  $('songSelect').value=key;$('songName').textContent=getSong().name+' · '+getSong().artist;
  $('tempoBtn').textContent='♩ '+state.bpm;
  state.singElapsed=0;state.lyricRenderKey='';if(state.audioSong&&state.audioSong!==key)clearImportedAudio();
@@ -409,21 +412,49 @@ function renderTimeline(){const action=targetAction(),n=state.actions.length,don
 function alignTrack(){const vw=$('actionWindow').clientWidth;const el=$('actionRail').children[Math.min(state.step,state.actions.length-1)];
  if(!el||!vw)return;const x=vw/2 - el.offsetLeft - el.offsetWidth/2;
  $('actionRail').style.transform=`translate3d(${x}px,0,0)`;}
-function setStrumFeedback(ok,msg){state.strumVerdict=ok?'good':'bad';state.strumMessage=msg;state.strumVerdictAt=performance.now();state.lastRender='';renderChord();}
+// 每次扫弦都显示具体卡在哪个环节。等右手稳定的短暂缓冲可避免两只手同时动作时误静音。
+function setStrumFeedback(status,msg){
+ state.strumVerdict=status===true?'good':status===false?'bad':status;
+ state.strumMessage=msg;state.strumVerdictAt=performance.now();state.lastRender='';renderChord();
+}
+function flushPendingStrum(now){
+ const p=state.pendingStrum;
+ if(!p)return;
+ if(now-p.at>650 || p.step!==state.step || !state.playing){state.pendingStrum=null;return}
+ const action=targetAction();
+ if(action && state.right.count===fingerFor(action.chord)){
+  state.pendingStrum=null;handleLeftStrum(p.dir,now);
+ }
+}
 function handleLeftStrum(dir,now){
  state.left.lastDirection=dir;
- if(!state.playing)return;
+ if(!state.playing){setStrumFeedback('pending','↕ 已检测到左手扫弦，请先点击「▶ 开始」');return}
  const action=targetAction();if(!action)return;
- if(!gateForChord(action.chord)){setStrumFeedback(false,`✕ 扫弦已识别，右手需要 ${action.fingers} 指 · ${action.chord}；没有通过和弦验证，因此不发声`);return}
- if(dir!==action.direction){setStrumFeedback(false,`✕ 扫弦方向错误：需要 ${action.direction==='D'?'↓下扫':'↑上扫'}`);return}
- if(!strum(dir,action.chord)){setStrumFeedback(false,'✕ 音频尚未就绪，触摸「开始」重试');return}
- setStrumFeedback(true,`✓ 左手 ${dir==='D'?'↓下扫':'↑上扫'} 正确 · 已发声`);
+ if(dir!==action.direction){setStrumFeedback(false,`✕ 左手已扫 ${dir==='D'?'↓下':'↑上'}，箭头要求 ${action.direction==='D'?'↓下':'↑上'}；请反向重试`);return}
+ if(!gateForChord(action.chord)){
+  // 右手有正确候选但还差一两帧才稳定：短暂缓冲这次扫弦，稳定后自动补发。
+  if(state.right.candidate===fingerFor(action.chord) && now-state.right.lastSeen<700){
+   state.pendingStrum={dir,at:now,step:state.step};
+   setStrumFeedback('pending',`↻ 左手${dir==='D'?'↓':'↑'}已识别，右手 ${action.fingers} 指正在确认…`);
+   return;
+  }
+  const seen=state.right.count===null?'未稳定':`${state.right.count} 指`;
+  setStrumFeedback(false,`✕ 左手扫弦已识别，但右手是${seen}；目标 ${action.chord} 需 ${action.fingers} 指`);
+  return;
+ }
+ if(!state.audio||state.audio.state!=='running'){
+  setStrumFeedback(false,'✕ 双手动作正确，但音频被暂停，请手动点「🔊 试音」重新解锁');return;
+ }
+ if(!strum(dir,action.chord)){
+  setStrumFeedback(false,'✕ 音频播放失败，请点「🔊 试音」检查');return;
+ }
+ setStrumFeedback(true,`✓ ${action.chord} · ${dir==='D'?'↓下扫':'↑上扫'}正确 · 已触发和弦`);
  if(state.mode==='practice'){
   state.step++;state.lastRender='';
   if(state.step>=state.actions.length){pause();toast('恭喜！全部动作都完成了。',2600)}
   renderTimeline();
  }else{
-  // 弹唱模式让歌曲和歌词按时钟前进，扫弦只负责判定及发声，不手动跳过歌词。
+  // 弹唱模式仅以音乐时钟推进歌词，扫弦只发声，不擅自跳过歌词。
   state.lastRender='';renderChord();
  }
 }
@@ -443,7 +474,7 @@ async function play(){
   state.playing=true;
   state.singInterval=setInterval(tickSing,75);tickSing();
  }else state.playing=true;
- state.strumVerdict='pending';state.strumMessage='左手扫弦：等待与中央箭头一致的动作';state.lastRender='';
+ state.strumVerdict='pending';state.strumMessage='左手扫弦：等待与中央箭头一致的动作';state.pendingStrum=null;state.lastRender='';
  $('playBtn').textContent='⏸ 暂停';renderTimeline();
  toast(state.mode==='sing'?'🎤 音乐与歌词开始推进。右手按数字选和弦，左手按箭头扫弦发声。':'🎯 右手比目标数字，左手按箭头上下扫；两手正确才推进。',3000);
 }
@@ -452,7 +483,7 @@ function pause(){
   const a=$('songAudio');if(state.audioSong===state.song&&state.audioObject)state.singElapsed=a.currentTime||state.singElapsed;
   else state.singElapsed=Math.max(0,(performance.now()-state.singBaseMs)/1000);
  }
- state.playing=false;
+ state.playing=false;state.pendingStrum=null;
  if(state.singInterval!==null){clearInterval(state.singInterval);state.singInterval=null}
  $('songAudio').pause();$('playBtn').textContent='▶ 开始 / 继续';
 }
@@ -478,22 +509,32 @@ function countFingers(L){
  return Math.min(5,count);
 }
 function trackRight(L,now){
- const fingers=countFingers(L),r=state.right;r.lastSeen=now;
- if(r.candidate!==fingers){r.candidate=fingers;r.since=now;r.count=null;state.lastRender=''}
- else if(now-r.since>270 && r.count!==fingers){r.count=fingers;state.lastRender=''}
+ const fingers=countFingers(L),r=state.right;
+ r.lastSeen=now;r.raw=fingers;
+ if(r.candidate!==fingers){
+  r.candidate=fingers;r.since=now;
+  // 防抖：一帧识别变化不能立刻清空原本已经稳定的手势。
+ }else if(now-r.since>=170 && r.count!==fingers){
+  r.count=fingers;state.lastRender='';flushPendingStrum(now);
+ }
 }
 function trackLeft(L,now){
  const t=state.left;t.lastSeen=now;
  const palm=(L[0].y+L[5].y+L[9].y+L[13].y+L[17].y)/5;
- const size=Math.max(.08,d(L[0],L[9]));
- if(t.palmY===null||now-(t.prevT||0)>450){t.palmY=palm;t.anchorY=palm;t.anchorAt=now;t.prevT=now;t.scale=size;return}
- t.palmY=.42*palm+.58*t.palmY;t.scale=.2*size+.8*t.scale;
+ const size=Math.max(.065,d(L[0],L[9]));
+ if(t.palmY===null||now-(t.prevT||0)>500){
+  t.palmY=palm;t.anchorY=palm;t.anchorAt=now;t.prevT=now;t.scale=size;t.movement=0;return;
+ }
+ t.palmY=.58*palm+.42*t.palmY;t.scale=.24*size+.76*t.scale;
  const delta=t.palmY-t.anchorY,age=now-t.anchorAt;
- // 运动方向基于画面垂直坐标，CSS 镜像只翻转 X，因此上下方向不会颠倒。
- const distLimit=Math.max(.038,t.scale*.20);
- if(age>=90&&age<1450&&Math.abs(delta)>distLimit&&now-t.lastEvent>380){
-  const dir=delta>0?'D':'U';t.lastEvent=now;t.anchorY=t.palmY;t.anchorAt=now;handleLeftStrum(dir,now);
- }else if(age>=1450){t.anchorY=t.palmY;t.anchorAt=now}
+ t.movement=Math.round(delta*1000)/10;
+ // 最小约 2.3% 画面高度，按手掌尺寸自适应；超过该幅度且速度足够才算一次扫弦。
+ const distLimit=Math.max(.023,t.scale*.14);
+ const speed=Math.abs(delta)/Math.max(age,1);
+ if(age>=70&&age<1100&&Math.abs(delta)>distLimit&&speed>.000045&&now-t.lastEvent>270){
+  const dir=delta>0?'D':'U';t.lastEvent=now;t.anchorY=t.palmY;t.anchorAt=now;
+  handleLeftStrum(dir,now);
+ }else if(age>=1100){t.anchorY=t.palmY;t.anchorAt=now}
  t.prevT=now;
 }
 function drawHand(ctx,L,label,color,w,h){
@@ -519,14 +560,17 @@ function processHands(results){
  const right=assigned.Right,left=assigned.Left;
  if(right){drawHand(ctx,right,'右手 · 和弦','#6af1a7',canvas.width,canvas.height);trackRight(right,now)}
  if(left){drawHand(ctx,left,'左手 · 扫弦','#ffbd79',canvas.width,canvas.height);trackLeft(left,now)}
- if(!right&&now-state.right.lastSeen>450){state.right.count=null;state.right.candidate=null;state.lastRender=''}
- if(!left&&now-state.left.lastSeen>350){state.left.palmY=null;state.left.anchorY=null;state.left.prevT=0}
+ if(!right&&now-state.right.lastSeen>900){state.right.count=null;state.right.candidate=null;state.right.raw=null;state.pendingStrum=null;state.lastRender=''}
+ if(!left&&now-state.left.lastSeen>350){state.left.palmY=null;state.left.anchorY=null;state.left.prevT=0;state.left.movement=0}
  const action=targetAction();
  const actual=recognizedChord();
- $('fingerText').textContent=`右手：${actual||'未确认'} ${state.right.count===null?'':`(${state.right.count}指)`}　左手：${left?'已追踪':'未识别'}`;
- $('gestureText').textContent=action?`目标 ${action.chord}=${action.fingers}指 / ${action.direction==='D'?'↓下扫':'↑上扫'} · ${hands.length}/2只手`:'练习完成';
+ $('fingerText').textContent=`右手：${actual||'未稳定'} ${state.right.count===null?(state.right.raw===null?'':`（识别中${state.right.raw}指）`):`(${state.right.count}指)`}　左手：${left?'已追踪':'未识别'}`;
+ $('gestureText').textContent=action?`目标 ${action.chord}=${action.fingers}指 / ${action.direction==='D'?'↓下扫':'↑上扫'} · 左手位移 ${state.left.movement||0}% · ${hands.length}/2只手`:'练习完成';
  $('mappedGesture').textContent=`C=0指 G=1指 · 目前${hands.length}只手`;
- if(state.strumVerdict!=='pending'&&now-state.strumVerdictAt>1600){state.strumVerdict='pending';state.strumMessage='左手扫弦：等待下次动作';state.lastRender=''}
+ if(now-state.strumVerdictAt>2500){
+  const msg=!state.playing?'⏸ 请点击「▶ 开始」后扫弦':!left?'请把左手放入画面，做上下扫弦':state.right.count===null?'等待右手手指数稳定…':'左手请按中央箭头做上下扫弦（观察左下角位移）';
+  if(state.strumVerdict!=='pending'||state.strumMessage!==msg){state.strumVerdict='pending';state.strumMessage=msg;state.lastRender=''}
+ }
  renderChord();
 }
 async function loadScript(url){return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=url;s.crossOrigin='anonymous';s.onload=resolve;s.onerror=()=>reject(new Error('模型脚本下载失败'));document.head.appendChild(s)})}
@@ -537,8 +581,8 @@ function stopCamera(){
  pause();state.camera=false;cancelAnimationFrame(state.reqFrame);const v=$('video');
  if(state.stream){state.stream.getTracks().forEach(t=>t.stop());state.stream=null}
  v.pause();v.srcObject=null;const can=$('overlay');can.getContext('2d').clearRect(0,0,can.width,can.height);
- state.right={lastSeen:0,count:null,candidate:null,since:0};
- state.left={lastSeen:0,palmY:null,anchorY:null,anchorAt:0,scale:.15,lastEvent:0,lastDirection:null};
+ state.right={lastSeen:0,count:null,candidate:null,since:0,raw:null};
+ state.left={lastSeen:0,palmY:null,anchorY:null,anchorAt:0,scale:.15,lastEvent:0,lastDirection:null,movement:0};
  state.strumVerdict='pending';state.strumMessage='左手扫弦：等待检测';state.lastRender='';state.videoBusy=false;
  $('cameraHelp').style.display='flex';$('cameraBtn').textContent='◉ 开启摄像头';setStatus('未开启摄像头');
  $('fingerText').textContent='右手：等待和弦 · 左手：等待扫弦';renderChord();
@@ -557,7 +601,7 @@ function attach(){
  $('swapHandsBtn').setAttribute('aria-pressed',String(!state.swapHands));
  $('swapHandsBtn').addEventListener('click',()=>{
   state.swapHands=!state.swapHands;try{localStorage.setItem('swapHands',state.swapHands)}catch(e){}
-  state.right={lastSeen:0,count:null,candidate:null,since:0};state.left={lastSeen:0,palmY:null,anchorY:null,anchorAt:0,scale:.15,lastEvent:0};
+  state.right={lastSeen:0,count:null,candidate:null,since:0,raw:null};state.left={lastSeen:0,palmY:null,anchorY:null,anchorAt:0,scale:.15,lastEvent:0,lastDirection:null,movement:0};state.pendingStrum=null;
   state.lastRender='';$('swapHandsBtn').setAttribute('aria-pressed',String(!state.swapHands));
   toast('左右手识别已对调。请伸起右手，确认画面上它被标为「右手 · 和弦」。',3800);renderChord();
  });
