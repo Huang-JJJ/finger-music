@@ -136,7 +136,7 @@ body{overflow:hidden}#app{width:100vw;height:100vh;height:100dvh;display:flex;fl
 <body>
 <div id="app">
  <header class="topbar">
-  <div class="brand"><div class="brand-mark">♫</div><div><h1>指尖和弦</h1><small>十指和弦 · 单次自动扫弦 · 正确才响</small></div></div>
+  <div class="brand"><div class="brand-mark">♫</div><div><h1>指尖和弦</h1><small>十指和弦 · 真实吉他采样 · 单次扫弦</small></div></div>
   <div class="pillbar" role="group" aria-label="乐器音色"><button class="seg active" id="inst-uke" type="button">尤克里里</button><button class="seg" id="inst-guitar" type="button">吉他</button></div>
   <label class="select-wrap"><span>曲目</span><select id="songSelect" aria-label="选择练习曲"><option value="not_sad">我不难过</option><option value="old_date">老派约会之必要</option><option value="love">情非得已</option></select></label>
   <button class="mini-btn" id="flipBtn" title="切换前后摄像头">⟳ <span class="hide-xs">切换镜头</span></button>
@@ -157,7 +157,7 @@ body{overflow:hidden}#app{width:100vw;height:100vh;height:100dvh;display:flex;fl
       <div class="chord-name" id="chordName">—</div>
       <div class="chord-title" id="chordTitle">目标 C · 双手合计 1 指</div>
       <div class="verdict pending" id="chordMatch" aria-live="polite">合计指数字：等待检测</div>
-      <div class="verdict pending" id="strumMatch" aria-live="polite">单次扫弦：等待正确手指数</div>
+      <div class="verdict pending" id="strumMatch" aria-live="polite">真实逐弦扫弦：等待手指数</div>
       <div class="chord-select" id="chordSelect" aria-label="双手手指数和弦对照"></div>
     </div><div class="finger-diagram" id="fingerDiagram" aria-label="目标和弦指法图"></div></div>
    </section>
@@ -184,7 +184,7 @@ body{overflow:hidden}#app{width:100vw;height:100vh;height:100dvh;display:flex;fl
 [00:00.00]第一句
 [00:04.20]第二句"></textarea>
   <div class="editor-buttons"><label class="editor-file">导入 .lrc / .txt <input type="file" id="lyricFile" accept=".lrc,.txt,text/plain" hidden /></label><button id="saveLyricsBtn" class="editor-save">保存歌词</button><button id="clearLyricsBtn">清空歌词</button></div>
-  <div class="editor-audio"><strong>🎵 自选歌曲音乐（可选）</strong><p>可以导入你本机拥有合法使用权的歌曲音频（MP3 / M4A / WAV）。本版严格闯关：按「开始」不会播放伴奏或所导入音频；伸出的手指数正确后，程序只会自动演奏一次本节奏预设的上扫 ↑ 或下扫 ↓。导入音频保留为以后人工试听素材；歌词进度由成功的手指数触发和弦演奏后控制。</p><div class="editor-buttons"><label class="editor-file">选择本地音频 <input type="file" id="audioFile" accept="audio/*,.mp3,.m4a,.wav" hidden /></label><button id="clearAudioBtn">移除音频</button><span id="audioLabel" class="audio-label">当前：合成节拍伴奏</span></div></div>
+  <div class="editor-audio"><strong>🎵 自选歌曲音乐（可选）</strong><p>可以导入你本机拥有合法使用权的歌曲音频（MP3 / M4A / WAV）。本版严格闯关：按「开始」不会播放伴奏或所导入音频；伸出的手指数正确后，程序只会自动演奏一次本节奏预设的上扫 ↑ 或下扫 ↓。导入音频保留为以后人工试听素材；歌词进度由成功的手指数触发和弦演奏后控制。</p><div class="editor-buttons"><label class="editor-file">选择本地音频 <input type="file" id="audioFile" accept="audio/*,.mp3,.m4a,.wav" hidden /></label><button id="clearAudioBtn">移除音频</button><span id="audioLabel" class="audio-label">当前：真实吉他采样 / 离线备用合成</span></div></div>
   <label class="offset-row">LRC 歌词偏移（秒）<input id="lyricOffset" type="number" min="-30" max="30" step="0.5" value="0" /> <small>歌词比音乐快/慢时可调整</small></label>
  </div>
 </div>
@@ -234,7 +234,7 @@ const SONGS = {
 };
 const state = {
  instrument:'guitar',song:'not_sad',capo:0,camera:false,stream:null,facing:'user',hands:null,
- videoBusy:false,lastFrame:0,reqFrame:0, audio:null,master:null,samples:new Map(),
+ videoBusy:false,lastFrame:0,reqFrame:0, audio:null,master:null,samples:new Map(),guitarSamples:new Map(),samplePromise:null,sampleStatus:'idle',
  playing:false,step:0,bpm:88,actions:[],audioReady:false,
  finger:{count:null,raw:null,candidate:null,since:0,frames:0,hands:0,present:false,lastSeen:0,armed:true,lockedCount:null},
  autoBusy:false,autoTimer:null,autoToken:0,activeSources:new Set(),activeVoices:new Set(),rhythmPreset:0,
@@ -246,9 +246,60 @@ const state = {
 let toastTimer;
 function toast(msg,sec=3800){const el=$('toast');el.textContent=msg;el.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('visible'),sec)}
 function setStatus(message,on=false){$('camStatus').textContent=message;$('statusDot').classList.toggle('on',on)}
-function setInstrument(inst,notify=true){if(!DATA[inst])return;state.instrument=inst;try{localStorage.setItem('instrument',inst)}catch(e){}$('inst-uke').classList.toggle('active',inst==='uke');$('inst-guitar').classList.toggle('active',inst==='guitar');state.lastRender='';renderChord();if(notify)toast('已切换至'+DATA[inst].name+'音色（合成拨弦）',1800)}
+function setInstrument(inst,notify=true){if(!DATA[inst])return;state.instrument=inst;try{localStorage.setItem('instrument',inst)}catch(e){}$('inst-uke').classList.toggle('active',inst==='uke');$('inst-guitar').classList.toggle('active',inst==='guitar');state.lastRender='';renderChord();if(notify)toast('已切换至'+DATA[inst].name+'音色',1800)}
 function noteToFreq(note){const m=/^([A-G])(#?)(\d)$/.exec(note);if(!m)return 440;const semitone={C:0,D:2,E:4,F:5,G:7,A:9,B:11}[m[1]]+(m[2]?1:0);return 440*Math.pow(2,((+m[3]+1)*12+semitone-69)/12)}
 function getNotes(chord){const inst=DATA[state.instrument],shape=inst.shapes[chord]||inst.shapes.C;return shape.map((fret,i)=>{if(fret<0)return null;const s=inst.strings[i];return noteToFreq(s)*Math.pow(2,(fret+state.capo)/12)}).filter(Boolean)}
+// 保留每根真实琴弦的位置；不能过滤静音弦后丢失原弦编号。
+function getStringNotes(chord){
+ const inst=DATA[state.instrument],shape=inst.shapes[chord]||inst.shapes.C;
+ return shape.flatMap((fret,i)=>fret<0?[]:[{freq:noteToFreq(inst.strings[i])*Math.pow(2,(fret+state.capo)/12),open:noteToFreq(inst.strings[i]),stringIndex:i}]);
+}
+// 六根钢弦分别采用独立的真实录音；CC0，来源 Meta Open Sound。
+// 为了能继续使用单个 index.html 文件，首次加载时从网络缓存取样。
+// 加载或解码失败自动使用原有的本地合成，不会使演奏静音。
+const STEEL_SAMPLE_FILES=[
+ 'INSGuitarSteel_StringLowE_Vel02_E2_01.ogg',
+ 'INSGuitarSteel_StringA_Vel02_A2_01.ogg',
+ 'INSGuitarSteel_StringD_Vel02_D3_01.ogg',
+ 'INSGuitarSteel_StringG_Vel02_G3_01.ogg',
+ 'INSGuitarSteel_StringB_Vel02_B3_01.ogg',
+ 'INSGuitarSteel_StringHighE_Vel02_E4_01.ogg'
+];
+const STEEL_SAMPLE_DIR='https://raw.githubusercontent.com/facebookincubator/Meta-open-sound/main/systems/instruments/meta-steel-guitar/ogg/';
+const STEEL_SAMPLE_BACKUP='https://cdn.jsdelivr.net/gh/facebookincubator/Meta-open-sound@main/systems/instruments/meta-steel-guitar/ogg/';
+function triggerGuitarSamples(){
+ const ctx=state.audio;
+ if(!ctx||state.sampleStatus==='ready'||state.sampleStatus==='loading')return state.samplePromise;
+ state.sampleStatus='loading';
+ state.samplePromise=(async()=>{
+  let loaded=0;
+  await Promise.all(STEEL_SAMPLE_FILES.map(async(file,i)=>{
+   for(const base of [STEEL_SAMPLE_DIR,STEEL_SAMPLE_BACKUP]){
+    try{
+     const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),2600);
+     let response;
+     try{response=await fetch(base+file,{signal:controller.signal,mode:'cors',cache:'force-cache'})}
+     finally{clearTimeout(timeout)}
+     if(!response.ok)throw new Error('HTTP '+response.status);
+     const decoded=await ctx.decodeAudioData(await response.arrayBuffer());
+     if(decoded.duration<.12)throw new Error('sample too short');
+     // 检测真实拨弦开始点，去除录音前静音，避免起音听起来拖拍。
+     const data=decoded.getChannelData(0),n=Math.min(data.length,Math.round(ctx.sampleRate*.16));
+     let peak=0;for(let k=0;k<n;k+=5)peak=Math.max(peak,Math.abs(data[k]));
+     let pos=0;const threshold=Math.max(.0015,peak*.055);
+     for(let k=0;k<n;k++){if(Math.abs(data[k])>threshold){pos=k;break}}
+     state.guitarSamples.set(i,{buffer:decoded,offset:Math.max(0,pos/decoded.sampleRate-.003)});
+     loaded++;break;
+    }catch(err){console.warn('真实弦录音加载失败，尝试备用源：'+file,err)}
+   }
+  }));
+  state.sampleStatus=loaded===6?'ready':loaded?'partial':'fallback';
+  const message=loaded===6?'🎸 真实钢弦录音已就绪（6 弦）':loaded?'🎸 已加载 '+loaded+'/6 根真实琴弦 · 其他弦自动合成':'🎸 真实录音未能加载 · 已切换离线合成';
+  setAudioStatus(message,loaded>0);
+  return loaded;
+ })().catch(err=>{console.warn('guitar samples',err);state.sampleStatus='fallback';setAudioStatus('🎸 网络不可用，使用离线合成');return 0});
+ return state.samplePromise;
+}
 function ensureAudio(){
  if(!state.audio){
   const Ctx=window.AudioContext||window.webkitAudioContext;
@@ -281,12 +332,16 @@ async function unlockAudio(){
 async function testSound(){
  const ctx=await unlockAudio();if(!ctx){toast('声音仍受限制。请用 Safari/Chrome 打开 HTTPS 网站，点击试音，并检查媒体音量。',4800);return}
  try{
-  // 试音也使用与正式练习相同的逐弦扫弦音色。
-  const notes=getNotes('C');
-  notes.forEach(freq=>makePluckBuffer(freq)); // 先生成采样，再按真实时间差安排每根琴弦。
-  const now=ctx.currentTime+.040;
+  if(state.instrument==='guitar'){
+   setAudioStatus('🎸 正在加载真实吉他单弦录音…（首次联网）');
+   await triggerGuitarSamples();
+  }
+  const notes=getStringNotes('C');
+  // 在音频缓冲没有加载成功时，提前生成备用合成，避免首个音符卡顿。
+  notes.forEach(({freq,stringIndex})=>{if(!state.guitarSamples.has(stringIndex))makePluckBuffer(freq)});
+  const now=ctx.currentTime+.06;
   scheduleStrumStroke(notes,now,'down',false);
-  toast('正在试听 '+DATA[state.instrument].name+' 的单次下扫，听听短促起音和自然收音。',3200);
+  toast(state.instrument==='guitar'&&state.guitarSamples.size?'正在试听真实木吉他 · 逐根琴弦下扫':'正在试听自然逐弦扫弦（离线合成模式）',3200);
  }catch(e){console.error('sound test',e);setAudioStatus('🔇 音频播放失败：'+e.message);toast('声音播放失败：'+e.message,5000)}
 }
 // 改良的物理建模拨弦：利用琴弦延迟反馈、软阻尼和拨片瞬态模拟弦振。
@@ -321,8 +376,8 @@ function makePluckBuffer(freq){
   }
   // 包络中的前段加一点琴身共振；没有超短的硬截断。
   const t=i/sampleRate;
-  const resonance=bodyWeight*Math.sin(2*Math.PI*freq*t)*Math.exp(-t/(uke?.45:.85));
-  const pick=t<.008?(Math.random()*2-1)*(.05*(1-t/.008)):0;
+  const resonance=bodyWeight*.24*Math.sin(2*Math.PI*freq*t)*Math.exp(-t/(uke?.30:.50));
+  const pick=t<.006?(Math.random()*2-1)*(.028*(1-t/.006)):0;
   const fade=t>duration-.26?Math.max(0,(duration-t)/.26):1;
   out[i]=Math.max(-1,Math.min(1,(value*.70+resonance+pick)*fade));
  }
@@ -335,57 +390,97 @@ function dampPreviousChord(){
  const now=ctx.currentTime;
  for(const v of [...state.activeVoices]){
   try{
-   const t=Math.max(now,v.start+.002);
-   // 额外增益单独做 110ms 的收音，避免破坏原来的自然衰减包络。
-   v.choke.gain.setValueAtTime(1,t);
-   v.choke.gain.exponentialRampToValueAtTime(.0001,t+.11);
-   v.src.stop(t+.14);
+   // 换和弦时轻轻止弦，留一点点真实余音，不硬切。
+   const t=Math.max(now,v.start+.006);
+   v.choke.gain.cancelScheduledValues(t);
+   v.choke.gain.setValueAtTime(Math.max(.001,v.choke.gain.value),t);
+   v.choke.gain.exponentialRampToValueAtTime(.0001,t+.145);
+   v.src.stop(t+.17);
   }catch(e){}
  }
 }
-function pluck(freq,start,velocity=.40,tracked=false,stringIndex=0,stringCount=6,upstroke=false){
+// 轻微的拨片摩擦扫弦：一次扫弦只发一次，不能用持续噪声盖住弦音。
+function makeBrush(start,direction,amount=.015){
+ const ctx=state.audio;if(!ctx)return;
+ const duration=.105,buffer=ctx.createBuffer(1,Math.ceil(duration*ctx.sampleRate),ctx.sampleRate);
+ const a=buffer.getChannelData(0);
+ for(let i=0;i<a.length;i++){
+  const t=i/ctx.sampleRate;
+  const attack=Math.min(1,t/.012),decay=Math.exp(-Math.max(0,t-.012)/.024);
+  a[i]=(Math.random()*2-1)*attack*decay;
+ }
+ const src=ctx.createBufferSource();src.buffer=buffer;
+ const hi=ctx.createBiquadFilter();hi.type='highpass';hi.frequency.value=1700;
+ const low=ctx.createBiquadFilter();low.type='lowpass';low.frequency.value=7200;
+ const gain=ctx.createGain();gain.gain.value=amount;
+ src.connect(hi);hi.connect(low);low.connect(gain);gain.connect(state.master||ctx.destination);
+ src.start(start);src.onended=()=>{try{src.disconnect();hi.disconnect();low.disconnect();gain.disconnect()}catch(e){}};
+}
+function pluck(item,start,velocity=.4,tracked=false,stringIndex=0,stringCount=6,upstroke=false){
  const ctx=state.audio;if(!ctx)return;
  const uke=state.instrument==='uke';
- const buffer=makePluckBuffer(freq),src=ctx.createBufferSource();src.buffer=buffer;
+ const freq=typeof item==='number'?item:item.freq;
+ const sample=uke?null:state.guitarSamples.get(stringIndex);
+ let src,buffer,sourceOffset=0;
+ if(sample){
+  src=ctx.createBufferSource();buffer=sample.buffer;src.buffer=buffer;
+  src.playbackRate.value=freq/(typeof item==='number'?freq:item.open);
+  sourceOffset=sample.offset;
+ }else{
+  buffer=makePluckBuffer(freq);src=ctx.createBufferSource();src.buffer=buffer;
+ }
  const gain=ctx.createGain(),tone=ctx.createBiquadFilter();
- tone.type='lowpass';tone.frequency.value=uke?4600:5400;tone.Q.value=.53;
- const scaled=Math.max(.005,velocity)*(uke?.50:.53);
+ tone.type='lowpass';tone.frequency.value=sample?9100:uke?5600:6500;tone.Q.value=.45;
+ const scaled=Math.max(.005,velocity)*(sample?.35:uke?.47:.49);
  const beat=60/Math.max(40,state.bpm);
- // 一次拨弦自然衰减；不再让每根弦全音量拖尾四秒。
- const ring=Math.min(uke?1.18:1.50,Math.max(.62,beat*(uke?1.25:1.6)));
- const end=start+ring;
+ // 真实采样中已经包含原始拨弦衰减；不要再叠一个过强的指数包络。
+ const ring=Math.min(sample?2.05:uke?1.18:1.36,Math.max(.57,beat*(sample?2.05:uke?1.35:1.5)));
+ const available=sample?(buffer.duration-sourceOffset)/src.playbackRate.value:buffer.duration;
+ const playable=Math.max(.08,Math.min(ring,available-.012));
  gain.gain.setValueAtTime(.0001,start);
- gain.gain.linearRampToValueAtTime(scaled,start+.004);
- gain.gain.exponentialRampToValueAtTime(.0001,end);
+ gain.gain.linearRampToValueAtTime(scaled,start+(sample?.002:.004));
+ if(sample){
+  gain.gain.setValueAtTime(scaled,start+Math.max(.005,playable-.20));
+  gain.gain.exponentialRampToValueAtTime(.0001,start+playable);
+ }else{
+  gain.gain.exponentialRampToValueAtTime(.0001,start+playable);
+ }
  src.connect(tone);tone.connect(gain);
  const choke=ctx.createGain();choke.gain.value=1;gain.connect(choke);
  let panner=null;
  if(ctx.createStereoPanner){panner=ctx.createStereoPanner();
-  panner.pan.value=stringCount<=1?0:(stringIndex/(stringCount-1)-.5)*(uke?.30:.44);
+  panner.pan.value=stringCount<=1?0:(stringIndex/(stringCount-1)-.5)*(uke?.28:.38);
   choke.connect(panner);panner.connect(state.master||ctx.destination);
  }else choke.connect(state.master||ctx.destination);
  if(tracked){state.activeSources.add(src);state.activeVoices.add({src,gain,choke,start})}
- src.start(start);src.stop(end+.025);
+ if(sample)src.start(start,sourceOffset,Math.min(buffer.duration-sourceOffset,playable*src.playbackRate.value));
+ else src.start(start);
+ src.stop(start+playable+.025);
  src.onended=()=>{
   state.activeSources.delete(src);
   for(const v of state.activeVoices){if(v.src===src){state.activeVoices.delete(v);break}}
   try{src.disconnect();tone.disconnect();gain.disconnect();choke.disconnect();panner?.disconnect()}catch(e){}
  };
 }
-// Sweep each string sequentially rather than playing a block chord simultaneously.
-// Guitar downstroke has a more defined bass attack; upstroke favors brighter treble strings.
+// 下扫：由低音弦扫到高音弦；上扫：偏重高音的 3～4 根弦。
+// 单次扫弦的弦起音分布在 80～160ms 以内，模拟拨片真正划过琴弦。
 function scheduleStrumStroke(notes,start,direction='down',tracked=true){
  const uke=state.instrument==='uke',up=direction==='up';
- const ordered=up?[...notes].reverse():notes;
- const gap=(uke?.018:.024);
- ordered.forEach((freq,i)=>{
+ const voiceNotes=notes.map((item,i)=>typeof item==='number'?{freq:item,open:item,stringIndex:i}:item);
+ const ordered=up?voiceNotes.slice(-Math.min(uke?3:4,voiceNotes.length)).reverse():voiceNotes;
+ const gap=(uke?up?.018:.024:up?.021:.025);
+ let running=0;
+ makeBrush(start+.002,direction,uke?.009:.013);
+ ordered.forEach((item,i)=>{
   const alpha=ordered.length<=1?0:i/(ordered.length-1);
-  const strength=up?(uke?.29:.28)+(1-alpha)*.035:(uke?.36:.40)+(1-alpha)*.09;
-  const jitter=(i===0?0:(Math.random()-.5)*.006);
-  const stringIndex=up?notes.length-1-i:i;
-  pluck(freq,start+i*gap+jitter,strength,tracked,stringIndex,notes.length,up);
+  const strength=up?(uke?.46:.46)+(1-alpha)*.12:(uke?.45:.53)+(1-alpha)*.13;
+  // 让一部分琴弦稍强、一部分稍弱，避免 6 个完全等强的电子音。
+  const human=(i===0?0:(Math.random()-.5)*.006);
+  const delay=Math.max(0,running+human);
+  pluck(item,start+delay,strength,tracked,item.stringIndex,DATA[state.instrument].strings.length,up);
+  running+=gap*(.86+Math.random()*.28);
  });
- return (ordered.length-1)*gap;
+ return running;
 }
 
 // 不再检测上下扫弦，只核对两只手伸出的手指数总和。
@@ -401,13 +496,14 @@ function playAutoStrum(chord,direction='down'){
  if(!ctx||ctx.state!=='running'){setAudioStatus('🔇 声音未解锁：请点「🔊 试音」');return 0}
  if(!DATA[state.instrument].shapes[chord])return 0;
  try{
-  const notes=getNotes(chord),beat=60/state.bpm;
-  notes.forEach(freq=>makePluckBuffer(freq));
+  const notes=getStringNotes(chord);
+  if(state.instrument==='guitar')triggerGuitarSamples();
+  notes.forEach(({freq,stringIndex})=>{if(!state.guitarSamples.has(stringIndex))makePluckBuffer(freq)});
   dampPreviousChord();
   const now=ctx.currentTime+.042;
   const span=scheduleStrumStroke(notes,now,direction,true);
   state.lastSound=performance.now();
-  setAudioStatus('🎸 '+chord+' · '+strokeText(direction)+' · 单次扫弦',true);
+  setAudioStatus('🎸 '+chord+' · '+strokeText(direction)+(state.instrument==='guitar'&&state.guitarSamples.size?' · 真实琴弦采样':' · 自然扫弦合成'),true);
   // 仅在本次扫弦的逐弦起音结束后进入下一关，无第二次扫弦。
   return Math.max(320,Math.min(660,(span+.18)*1000));
  }catch(err){console.error('single strum audio',err);setAudioStatus('🔇 扫弦失败：'+err.message);return 0}
@@ -631,6 +727,7 @@ async function play(){
   toast('当前歌曲有未映射和弦；目前十指映射仅对应你最新提供的《我不难过》词谱。',4500);return;
  }
  const ctx=await unlockAudio();if(!ctx){toast('请先点击「🔊 试音」解锁音频。',3500);return}
+ if(state.instrument==='guitar')triggerGuitarSamples();
  if(state.step>=state.actions.length)state.step=0;
  cancelAutoStrum();
  $('songAudio').pause();state.playing=true;
@@ -748,9 +845,9 @@ function attach(){
   setSong('not_sad');setInstrument(state.instrument,false);$('modeBtn').classList.add('active');
 
  $('inst-uke').addEventListener('click',()=>{ensureAudio();setInstrument('uke')});
- $('inst-guitar').addEventListener('click',()=>{ensureAudio();setInstrument('guitar')});
+ $('inst-guitar').addEventListener('click',()=>{ensureAudio();setInstrument('guitar');triggerGuitarSamples()});
  $('songSelect').addEventListener('change',e=>setSong(e.target.value));
- $('cameraBtn').addEventListener('click',()=>{ensureAudio();startCamera()});
+ $('cameraBtn').addEventListener('click',()=>{ensureAudio();if(state.instrument==='guitar')triggerGuitarSamples();startCamera()});
  $('flipBtn').addEventListener('click',flipCamera);
  $('playBtn').addEventListener('click',play);
   $('testSoundBtn').addEventListener('click',testSound);
