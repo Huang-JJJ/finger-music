@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="指尖和弦" />
-<title>指尖和弦 AI · 十指和弦横屏弹唱版</title>
-<meta name="app-version" content="auto-strum-v1-20261029">
+<title>指尖和弦 AI · 十指和弦 · 吉他余音增强版</title>
+<meta name="app-version" content="auto-strum-realistic-guitar-thumb-v2-20261029">
 <style>
 :root{color-scheme:dark;--bg:#080d19;--panel:#111b30;--panel2:#141f35;--line:#26354d;--muted:#93a4c0;--txt:#eff5ff;--violet:#a999ff;--teal:#5ee3c0;--orange:#ffc98b;--red:#ff999c}
 *{box-sizing:border-box}html,body{padding:0;margin:0;min-width:0;min-height:100%;width:100%;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--txt)}button,select{font:inherit;color:inherit}button{cursor:pointer;-webkit-tap-highlight-color:transparent}button:focus-visible,select:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
@@ -219,7 +219,7 @@ const SONGS = {
  love:{name:'情非得已',artist:'庾澄庆',bpm:100,bars:['C','G','Am','Em','F','Em','F','G'],pattern:['D','U','','U','D','U','','U']}
 };
 const state = {
- instrument:'uke',song:'not_sad',capo:0,camera:false,stream:null,facing:'user',hands:null,
+ instrument:'guitar',song:'not_sad',capo:0,camera:false,stream:null,facing:'user',hands:null,
  videoBusy:false,lastFrame:0,reqFrame:0, audio:null,master:null,samples:new Map(),
  playing:false,step:0,bpm:88,actions:[],audioReady:false,
  finger:{count:null,raw:null,candidate:null,since:0,frames:0,hands:0,present:false,lastSeen:0,armed:true,lockedCount:null},
@@ -241,8 +241,18 @@ function ensureAudio(){
   if(!Ctx){toast('当前浏览器不支持 Web Audio');return null}
   try{
    const ctx=new Ctx();state.audio=ctx;
-   const compressor=ctx.createDynamicsCompressor();compressor.threshold.value=-18;compressor.knee.value=15;compressor.ratio.value=3;compressor.attack.value=.004;compressor.release.value=.22;
-   const master=ctx.createGain();master.gain.value=.94;master.connect(compressor);compressor.connect(ctx.destination);state.master=master;
+   const compressor=ctx.createDynamicsCompressor();
+   compressor.threshold.value=-15;compressor.knee.value=16;compressor.ratio.value=2.2;
+   compressor.attack.value=.009;compressor.release.value=.3;
+   const master=ctx.createGain();master.gain.value=.78;
+   master.connect(compressor);compressor.connect(ctx.destination);state.master=master;
+   // 很轻的琴箱/室内早期反射：使各弦余音自然叠加，避免干硬的电子琴音。
+   const early=ctx.createDelay(.4);early.delayTime.value=.073;
+   const wet=ctx.createGain();wet.gain.value=.105;
+   const feedback=ctx.createGain();feedback.gain.value=.14;
+   master.connect(early);early.connect(wet);wet.connect(compressor);
+   early.connect(feedback);feedback.connect(early);
+   state.ambience={early,wet,feedback};
   }catch(e){console.error('audio context',e);toast('音频初始化失败：'+e.message);return null}
  }
  return state.audio;
@@ -256,14 +266,97 @@ async function unlockAudio(){
 }
 async function testSound(){
  const ctx=await unlockAudio();if(!ctx){toast('声音仍受限制。请用 Safari/Chrome 打开 HTTPS 网站，点击试音，并检查媒体音量。',4800);return}
- try{const notes=getNotes('C'),start=ctx.currentTime+.018;notes.forEach((freq,i)=>pluck(freq,start+i*.045,.48));
-  toast('正在试听 '+DATA[state.instrument].name+' C 和弦。如果没有声音，请调高手机媒体音量并确认没有连接蓝牙耳机。',4700)
+ try{
+  // 试音也使用与正式练习相同的逐弦扫弦音色。
+  const notes=getNotes('C');
+  notes.forEach(freq=>makePluckBuffer(freq)); // 先生成采样，再按真实时间差安排每根琴弦。
+  const now=ctx.currentTime+.040;
+  scheduleStrumStroke(notes,now,'down',false);
+  toast('正在试听 '+DATA[state.instrument].name+' 的逐弦下扫。声音会有拨弦瞬态与自然拖尾。',3600);
  }catch(e){console.error('sound test',e);setAudioStatus('🔇 音频播放失败：'+e.message);toast('声音播放失败：'+e.message,5000)}
 }
+// 改良的物理建模拨弦：利用琴弦延迟反馈、软阻尼和拨片瞬态模拟弦振。
+// 完全本地合成，不冒充原声吉他录音；比旧版短促噪声波形更接近琴弦余音。
+function makePluckBuffer(freq){
+ const ctx=state.audio,uke=state.instrument==='uke';
+ const sampleRate=ctx.sampleRate, duration=uke?2.65:4.15;
+ const key='acoustic-v2:'+state.instrument+':'+Math.round(freq*100)/100+':'+sampleRate;
+ if(state.samples.has(key))return state.samples.get(key);
+ const num=Math.ceil(duration*sampleRate),buffer=ctx.createBuffer(1,num,sampleRate),out=buffer.getChannelData(0);
+ const period=Math.max(3,sampleRate/freq),whole=Math.max(2,Math.floor(period)),frac=period-whole;
+ const excitation=new Float32Array(whole+2);
+ let smooth=0;
+ // 分布式拨弦噪声，经低通消除纯白噪声的尖锐电子感。
+ for(let i=0;i<excitation.length;i++){
+  const n=(Math.random()*2-1);
+  smooth=.58*smooth+.42*n;
+  excitation[i]=smooth*(uke?.74:.87);
+ }
+ let prev=0,loop=0;
+ const loss=Math.exp(-1/(freq*(uke?1.9:3.0)));
+ const bodyWeight=uke?.09:.15;
+ for(let i=0;i<num;i++){
+  let value;
+  if(i<excitation.length){value=excitation[i]}
+  else{
+   // Fractional-delay interpolation: keep fret/note pitch correct even at high frequencies.
+   const delayed=(1-frac)*out[i-whole]+frac*out[i-whole-1];
+   const filtered=.78*delayed+.22*prev;
+   value=loss*filtered;
+   prev=delayed;
+  }
+  // 包络中的前段加一点琴身共振；没有超短的硬截断。
+  const t=i/sampleRate;
+  const resonance=bodyWeight*Math.sin(2*Math.PI*freq*t)*Math.exp(-t/(uke?.9:1.8));
+  const pick=t<.008?(Math.random()*2-1)*(.05*(1-t/.008)):0;
+  const fade=t>duration-.38?Math.max(0,(duration-t)/.38):1;
+  out[i]=Math.max(-1,Math.min(1,(value*.70+resonance+pick)*fade));
+ }
+ // 控制缓存，避免老手机长时间使用后内存持续增长。
+ if(state.samples.size>=46){const oldest=state.samples.keys().next().value;state.samples.delete(oldest)}
+ state.samples.set(key,buffer);return buffer;
+}
+function pluck(freq,start,velocity=.40,tracked=false,stringIndex=0,stringCount=6,upstroke=false){
+ const ctx=state.audio;if(!ctx)return;
+ const uke=state.instrument==='uke';
+ const buffer=makePluckBuffer(freq),src=ctx.createBufferSource();src.buffer=buffer;
+ const gain=ctx.createGain(),tone=ctx.createBiquadFilter();
+ tone.type='lowpass';tone.frequency.value=uke?5300:6200;tone.Q.value=.53;
+ // 快速、但不尖锐的起音，随后整段自然延音与重叠；主音量由弦数归一化。
+ const scaled=Math.max(.005,velocity)*(uke?.46:.49);
+ gain.gain.setValueAtTime(.0001,start);
+ gain.gain.linearRampToValueAtTime(scaled,start+(upstroke?.0035:.0026));
+ const end=start+buffer.duration;
+ gain.gain.setValueAtTime(scaled,end-.38);
+ gain.gain.linearRampToValueAtTime(.0001,end);
+ src.connect(tone);tone.connect(gain);
+ let panner=null;
+ if(ctx.createStereoPanner){panner=ctx.createStereoPanner();
+  panner.pan.value=stringCount<=1?0:(stringIndex/(stringCount-1)-.5)*(uke?.33:.46);
+  gain.connect(panner);panner.connect(state.master||ctx.destination);
+ }else gain.connect(state.master||ctx.destination);
+ if(tracked)state.activeSources.add(src);
+ src.start(start);src.stop(end);
+ src.onended=()=>{state.activeSources.delete(src);
+  try{src.disconnect();tone.disconnect();gain.disconnect();panner?.disconnect()}catch(e){}
+ };
+}
+// Sweep each string sequentially rather than playing a block chord simultaneously.
+// Guitar downstroke has a more defined bass attack; upstroke favors brighter treble strings.
+function scheduleStrumStroke(notes,start,direction='down',tracked=true){
+ const uke=state.instrument==='uke',up=direction==='up';
+ const ordered=up?[...notes].reverse():notes;
+ const gap=(uke?.026:.033);
+ ordered.forEach((freq,i)=>{
+  const alpha=ordered.length<=1?0:i/(ordered.length-1);
+  const strength=up?(uke?.29:.28)+(1-alpha)*.035:(uke?.36:.40)+(1-alpha)*.09;
+  const jitter=(i===0?0:(Math.random()-.5)*.006);
+  const stringIndex=up?notes.length-1-i:i;
+  pluck(freq,start+i*gap+jitter,strength,tracked,stringIndex,notes.length,up);
+ });
+ return (ordered.length-1)*gap;
+}
 
-function pluck(freq,start,velocity=0.58,tracked=false){const ctx=state.audio;if(!ctx)return;const uke=state.instrument==='uke';const duration=uke?1.25:2.0;const rate=ctx.sampleRate;const n=Math.ceil(rate*duration);const key=state.instrument+'_'+Math.round(freq);let buffer=state.samples.get(key);
- if(!buffer){buffer=ctx.createBuffer(1,n,rate);const out=buffer.getChannelData(0);const period=Math.max(2,Math.round(rate/freq));const delay=new Float32Array(period);for(let i=0;i<period;i++)delay[i]=(Math.random()*2-1)*(uke?.64:.8);let prev=0;const feedback=uke?.985:.993;for(let i=0;i<n;i++){const idx=i%period;const val=delay[idx];const next=((val+prev)*.5)*feedback;delay[idx]=next;prev=val;const click=i<180?((Math.random()*2-1)*(.07*(1-i/180))):0;out[i]=val*.42+click;}state.samples.set(key,buffer)}
- const src=ctx.createBufferSource();src.buffer=buffer;const gain=ctx.createGain(),lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=uke?3300:2600;gain.gain.setValueAtTime(0.0001,start);gain.gain.exponentialRampToValueAtTime(Math.max(.0001,velocity),start+.014);gain.gain.exponentialRampToValueAtTime(.0001,start+duration-.02);src.connect(lp);lp.connect(gain);gain.connect(state.master||ctx.destination);if(tracked)state.activeSources.add(src);src.start(start);src.stop(start+duration);src.onended=()=>{state.activeSources.delete(src);try{src.disconnect();lp.disconnect();gain.disconnect()}catch(e){}}}
 // 不再检测上下扫弦，只核对两只手伸出的手指数总和。
 function recognizedChord(){
  const f=state.finger;
@@ -278,16 +371,17 @@ function playAutoStrum(chord){
  if(!ctx||ctx.state!=='running'){setAudioStatus('🔇 声音未解锁：请点「🔊 试音」');return 0}
  if(!DATA[state.instrument].shapes[chord])return 0;
  try{
-  const notes=getNotes(chord),beat=60/state.bpm,now=ctx.currentTime+.020;
-  const stringGap=state.instrument==='uke'?.029:.034;
-  const downVelocity=state.instrument==='uke'?.48:.38;
-  const upVelocity=downVelocity*.78;
-  // 向下按实际琴弦顺序，向上逆序；一组两个动作，节奏与 BPM 同步。
-  notes.forEach((freq,i)=>pluck(freq,now+i*stringGap,downVelocity,true));
-  [...notes].reverse().forEach((freq,i)=>pluck(freq,now+beat+i*stringGap,upVelocity,true));
+  const notes=getNotes(chord),beat=60/state.bpm;
+  // 优先生成每弦样本，避免第一次播放时耗时导致原定音符开始时间已过、六弦同时发声。
+  notes.forEach(freq=>makePluckBuffer(freq));
+  const now=ctx.currentTime+.040;
+  const downSpan=scheduleStrumStroke(notes,now,'down',true);
+  const upStart=now+Math.max(.32,beat);
+  const upSpan=scheduleStrumStroke(notes,upStart,'up',true);
   state.lastSound=performance.now();
-  setAudioStatus('🔊 '+chord+' · 程序自动 ↓ 上下扫弦 ↑',true);
-  return (beat*1.55+notes.length*stringGap)*1000;
+  setAudioStatus('🎸 '+chord+' · 逐弦下扫 ↓ 上扫 ↑ · 琴弦持续共鸣',true);
+  // 让最后一根弦有余音：闯关动作结算不必等待声音全部衰减完毕。
+  return (Math.max(.32,beat)+upSpan+.34)*1000;
  }catch(err){console.error('automatic strum audio',err);setAudioStatus('🔇 自动扫弦失败：'+err.message);return 0}
 }
 function cancelAutoStrum(){
@@ -528,17 +622,27 @@ function d(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
 // 伸指判断同时参考关节夹角和伸展距离，对 C(握拳) 与 G(食指1根) 优先采用稳定帧确认。
 function angle(a,b,c){const ax=a.x-b.x,ay=a.y-b.y,bx=c.x-b.x,by=c.y-b.y;
  return Math.acos(Math.max(-1,Math.min(1,(ax*bx+ay*by)/(Math.hypot(ax,ay)*Math.hypot(bx,by)||1))))*180/Math.PI}
-function countFingers(L){
- let count=0;
+// 基于手掌尺度的距离和关节角度检测拇指；不依赖画面左右方向或大拇指 x 坐标。
+function analyzeFingers(L){
+ const fingers=[];
  for(const [mcp,pip,dip,tip] of [[5,6,7,8],[9,10,11,12],[13,14,15,16],[17,18,19,20]]){
-  const straight=angle(L[mcp],L[pip],L[dip])>146 && angle(L[pip],L[dip],L[tip])>138;
-  const extended=d(L[tip],L[0])>d(L[pip],L[0])*1.07;
-  if(straight&&extended)count++;
+  const straight=angle(L[mcp],L[pip],L[dip])>139 && angle(L[pip],L[dip],L[tip])>131;
+  const extended=d(L[tip],L[0])>d(L[pip],L[0])*1.035;
+  fingers.push(straight&&extended);
  }
- const thumbOpen=d(L[4],L[17])>d(L[3],L[17])*1.25 && d(L[4],L[5])>d(L[3],L[5])*1.10;
- if(thumbOpen)count++;
- return Math.min(5,count);
+ const palm=Math.max(.015,d(L[5],L[17]));
+ const thumbAngle=angle(L[2],L[3],L[4]);
+ const fromIndex=d(L[4],L[5]);
+ const fromPinky=d(L[4],L[17]);
+ // 开放拇指会向小指根部和食指根部的外侧延伸；握拳的拇指贴在掌心。
+ const spread=fromIndex>palm*.65 && fromPinky>palm*.92;
+ const outward=(fromPinky-d(L[3],L[17])>palm*.055) ||
+               (fromIndex-d(L[3],L[5])>palm*.09);
+ // 对大拇指只要求外展 + 至少一个延伸特征；以前的两个 1.25/1.10 比值过于严格。
+ const thumb=spread && (outward || thumbAngle>151) && thumbAngle>126;
+ return {count:fingers.filter(Boolean).length+Number(thumb),thumb,fingers};
 }
+function countFingers(L){return analyzeFingers(L).count}
 // 两只手（甚至只出现一只手）都参与计数，不再分左右手的和弦/扫弦角色。
 function trackCombinedFingers(landmarks,now){
  const f=state.finger;
@@ -569,12 +673,12 @@ function processHands(results){
  if(canvas.width!==v.videoWidth||canvas.height!==v.videoHeight){canvas.width=v.videoWidth||1280;canvas.height=v.videoHeight||720}
  ctx.clearRect(0,0,canvas.width,canvas.height);
  const hands=(results.multiHandLandmarks||[]).slice(0,2),now=performance.now();
- hands.forEach((hand,i)=>drawHand(ctx,hand,`第${i+1}只手 · ${countFingers(hand)} 指`,i===0?'#6af1a7':'#ffbd79',canvas.width,canvas.height));
+ hands.forEach((hand,i)=>{const f=analyzeFingers(hand);drawHand(ctx,hand,`手${i+1} ${f.count} 指 · 拇${f.thumb?'✓':'×'}`,i===0?'#6af1a7':'#ffbd79',canvas.width,canvas.height)});
  trackCombinedFingers(hands,now);
  const f=state.finger,action=targetAction(),count=f.present?f.count:null;
  $('fingerText').textContent=`已识别 ${hands.length} 只手 · ${count===null?'确认中':`合计 ${count} 指`}`;
  $('gestureText').textContent=action?`目标 ${action.chord} = ${action.fingers??'?'} 指 · 同指连续演奏请先收成 0 指`:'全部演奏完成';
- $('mappedGesture').textContent='双手指总数 · 对应 10 和弦 · 自动扫弦 ↓↑';
+ $('mappedGesture').textContent='双手合计 1～10 指 · 拇指计数增强 · 自动扫弦 ↓↑';
  if(now-state.gestureVerdictAt>2200){
   const msg=!state.playing?'⏸ 点击「开始」，再伸出目标手指数':!hands.length?'请把一只或两只手放入画面':count===null?'正在确认手指数…':count===0?'已归零，请伸出目标手指数':!f.armed?'保持不会连发；先换手势或归零后再伸指':'请调整为目标手指数';
   if(state.gestureVerdict!=='pending'||state.gestureMessage!==msg){state.gestureVerdict='pending';state.gestureMessage=msg;state.lastRender=''}
